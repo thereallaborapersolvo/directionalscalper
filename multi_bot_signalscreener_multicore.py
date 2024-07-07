@@ -595,10 +595,16 @@ def bybit_auto_rotation(args, manager, symbols_allowed):
                 logging.info(f"Submitted signal processing for open position symbols: {open_position_symbols}.")
                 logging.info(f"Active symbols count: {len(active_symbols)}")
 
+                # Filter out blacklisted symbols from active symbols
+                adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+
                 update_active_symbols(open_position_symbols)
                 logging.info(f"Active symbols updated. Symbols allowed: {symbols_allowed}")
                 logging.info(f"Active symbols: {active_symbols}")
                 logging.info(f"Active symbols count: {len(active_symbols)}")
+                logging.info(f"Adjusted Active symbols count: {len(adjusted_active_symbols)}")
+                logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
+                
 
                 # Process new symbols only if there is capacity
                 if len(active_symbols) < symbols_allowed:
