@@ -460,6 +460,10 @@ def bybit_auto_rotation_spot(args, manager, symbols_allowed):
             logging.info(f"Active symbols: {active_symbols}")
             logging.info(f"Active symbols updated. Symbols allowed: {symbols_allowed}")
 
+            # Filter out blacklisted symbols from active symbols
+            adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+            logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
+
             with thread_management_lock:
                 # update_active_symbols(open_position_symbols)
                 # logging.info(f"Active symbols updated. Symbols allowed: {symbols_allowed}")
@@ -569,6 +573,10 @@ def bybit_auto_rotation(args, manager, symbols_allowed):
                 update_active_symbols(open_position_symbols)
                 logging.info(f"Active symbols updated. Symbols allowed: {symbols_allowed}")
                 logging.info(f"Active symbols: {active_symbols}")
+
+                # Filter out blacklisted symbols from active symbols
+                adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+                logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
 
                 # Always check signals for open symbols
                 for symbol in open_position_symbols:
@@ -1121,6 +1129,10 @@ if __name__ == '__main__':
 
             logging.info(f"Active symbols: {active_symbols}")
             logging.info(f"Total active symbols: {len(active_symbols)}")
+
+            # Filter out blacklisted symbols from active symbols
+            adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+            logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
 
             time.sleep(10)
         except Exception as e:
