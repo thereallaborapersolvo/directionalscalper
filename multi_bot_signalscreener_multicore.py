@@ -213,29 +213,14 @@ class DirectionalMarketMaker:
             'bybit_1m_qfl_mfi_eri_autohedge_walls_atr': bybit_hedging.BybitMMOneMinuteQFLMFIERIAutoHedgeWallsATR,
             'bybit_mfirsi_imbalance': bybit_scalping.BybitMFIRSIERIOBImbalance,
             'bybit_mfirsi_quickscalp': bybit_scalping.BybitMFIRSIQuickScalp,
-            'qstrend': bybit_notional.BybitQuickScalpTrendNotional,
             'qsematrend': bybit_scalping.BybitQuickScalpEMATrend,
             'qstrend_dca': bybit_scalping.BybitQuickScalpTrendDCA,
             'mfieritrend': bybit_scalping.BybitMFIERILongShortTrend,
             'qstrendlongonly': bybit_scalping.BybitMFIRSIQuickScalpLong,
             'qstrendshortonly': bybit_scalping.BybitMFIRSIQuickScalpShort,
             'qstrend_unified': bybit_scalping.BybitQuickScalpUnified,
-            'qstrendemas': bybit_notional.BybitQSTrendDoubleMANotional,
             'basicgrid': bybit_scalping.BybitBasicGrid,
             'qstrendspot': bybit_scalping.BybitQuickScalpTrendSpot,
-            'basicgridpersist': bybit_notional.BybitBasicGridMFIRSIPersisentNotional,
-            'qstrenderi': bybit_notional.BybitQuickScalpTrendERINotional,
-            'qsgridnotional': bybit_notional.BybitQSGridNotional,
-            'qsgridbasic': bybit_notional.BybitBasicGridBuffered,
-            'qsgriddynamic': bybit_notional.BybitBasicGridBufferedQS,
-            'qstrendob': bybit_notional.BybitQuickScalpTrendOBNotional,
-            'qsgriddynamictp': bybit_notional.BybitBasicGridBufferedQSDTP,
-            'qsgriddynamictplinspaced': bybit_notional.BybitDynamicGridDynamicTPLinSpaced,
-            'qsdynamicgridspan': bybit_notional.BybitDynamicGridSpan,
-            'dynamicgridob': bybit_notional.BybitDynamicGridSpanOB,
-            'dynamicgridobsratrp': bybit_notional.BybitDynamicGridSpanOBSRATRP,
-            'qsgriddynamicstatic': bybit_notional.BybitDynamicGridSpanOBSRStatic,
-            'qsgridobdca': bybit_notional.BybitDynamicGridOBDCA,
             'qsgridinstantsignal': instant_signals.BybitDynamicGridSpanOBSRStaticIS,
             'qsgriddynmaicgridspaninstant': instant_signals.BybitDynamicGridSpanIS,
             'qsgridobtight': instant_signals.BybitDynamicGridSpanOBTight,
@@ -1098,26 +1083,27 @@ if __name__ == '__main__':
             blacklist = config.bot.blacklist
             max_usd_value = config.bot.max_usd_value
 
-            if exchange_name.lower() == 'bybit':
-                bybit_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'bybit_spot':
-                bybit_auto_rotation_spot(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'blofin':
-                blofin_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'hyperliquid':
-                hyperliquid_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'huobi':
-                huobi_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'bitget':
-                bitget_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'binance':
-                binance_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'mexc':
-                mexc_auto_rotation(args, manager, symbols_allowed)
-            elif exchange_name.lower() == 'lbank':
-                lbank_auto_rotation(args, manager, symbols_allowed)
-            else:
-                logging.warning(f"Auto-rotation not implemented for exchange: {exchange_name}")
+            match exchange_name.lower():
+                case 'bybit':
+                    bybit_auto_rotation(args, manager, symbols_allowed)
+                case 'bybit_spot':
+                    bybit_auto_rotation_spot(args, manager, symbols_allowed)
+                case 'blofin':
+                    blofin_auto_rotation(args, manager, symbols_allowed)
+                case 'hyperliquid':
+                    hyperliquid_auto_rotation(args, manager, symbols_allowed)
+                case 'huobi':
+                    huobi_auto_rotation(args, manager, symbols_allowed)
+                case 'bitget':
+                    bitget_auto_rotation(args, manager, symbols_allowed)
+                case 'binance':
+                    binance_auto_rotation(args, manager, symbols_allowed)
+                case 'mexc':
+                    mexc_auto_rotation(args, manager, symbols_allowed)
+                case 'lbank':
+                    lbank_auto_rotation(args, manager, symbols_allowed)
+                case _:
+                    logging.warning(f"Auto-rotation not implemented for exchange: {exchange_name}")
 
             logging.info(f"Active symbols: {active_symbols}")
             logging.info(f"Total active symbols: {len(active_symbols)}")

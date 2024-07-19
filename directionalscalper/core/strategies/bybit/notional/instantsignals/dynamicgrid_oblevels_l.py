@@ -8,6 +8,7 @@ import traceback
 from threading import Thread, Lock
 from datetime import datetime, timedelta
 
+from directionalscalper.core.config_initializer import ConfigInitializer
 from directionalscalper.core.strategies.bybit.bybit_strategy import BybitStrategy
 from directionalscalper.core.exchanges.bybit import BybitExchange
 from directionalscalper.core.strategies.logger import Logger
@@ -34,63 +35,8 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
         self.helper_interval = 1
         self.running_long = False
         self.running_short = False
-        self._initialize_config_attributes(config)
+        ConfigInitializer.initialize_config_attributes(self, config)
         self._initialize_symbol_locks(rotator_symbols_standardized)
-
-    def _initialize_config_attributes(self, config):
-        try:
-            self.wallet_exposure_limit = config.wallet_exposure_limit
-            self.user_defined_leverage_long = config.user_defined_leverage_long
-            self.user_defined_leverage_short = config.user_defined_leverage_short
-            self.levels = config.linear_grid['levels']
-            self.strength = config.linear_grid['strength']
-            self.outer_price_distance = config.linear_grid['outer_price_distance']
-            self.long_mode = config.linear_grid['long_mode']
-            self.short_mode = config.linear_grid['short_mode']
-            self.reissue_threshold = config.linear_grid['reissue_threshold']
-            self.buffer_percentage = config.linear_grid['buffer_percentage']
-            self.enforce_full_grid = config.linear_grid['enforce_full_grid']
-            self.initial_entry_buffer_pct = config.linear_grid['initial_entry_buffer_pct']
-            self.min_buffer_percentage = config.linear_grid['min_buffer_percentage']
-            self.max_buffer_percentage = config.linear_grid['max_buffer_percentage']
-            self.wallet_exposure_limit_long = config.linear_grid['wallet_exposure_limit_long']
-            self.wallet_exposure_limit_short = config.linear_grid['wallet_exposure_limit_short']
-            self.min_buffer_percentage_ar = config.linear_grid['min_buffer_percentage_ar']
-            self.max_buffer_percentage_ar = config.linear_grid['max_buffer_percentage_ar']
-            self.upnl_auto_reduce_threshold_long = config.linear_grid['upnl_auto_reduce_threshold_long']
-            self.upnl_auto_reduce_threshold_short = config.linear_grid['upnl_auto_reduce_threshold_short']
-            self.failsafe_enabled = config.linear_grid['failsafe_enabled']
-            self.long_failsafe_upnl_pct = config.linear_grid['long_failsafe_upnl_pct']
-            self.short_failsafe_upnl_pct = config.linear_grid['short_failsafe_upnl_pct']
-            self.failsafe_start_pct = config.linear_grid['failsafe_start_pct']
-            self.auto_reduce_cooldown_enabled = config.linear_grid['auto_reduce_cooldown_enabled']
-            self.auto_reduce_cooldown_start_pct = config.linear_grid['auto_reduce_cooldown_start_pct']
-            self.max_qty_percent_long = config.linear_grid['max_qty_percent_long']
-            self.max_qty_percent_short = config.linear_grid['max_qty_percent_short']
-            self.min_outer_price_distance = config.linear_grid['min_outer_price_distance']
-            self.max_outer_price_distance = config.linear_grid['max_outer_price_distance']
-            self.upnl_threshold_pct = config.upnl_threshold_pct
-            self.volume_check = config.volume_check
-            self.max_usd_value = config.max_usd_value
-            self.blacklist = config.blacklist
-            self.test_orders_enabled = getattr(config, 'test_orders_enabled', False)
-            self.upnl_profit_pct = config.upnl_profit_pct
-            self.max_upnl_profit_pct = config.max_upnl_profit_pct
-            self.stoploss_enabled = config.stoploss_enabled
-            self.stoploss_upnl_pct = config.stoploss_upnl_pct
-            self.liq_stoploss_enabled = config.liq_stoploss_enabled
-            self.liq_price_stop_pct = config.liq_price_stop_pct
-            self.auto_reduce_enabled = config.auto_reduce_enabled
-            self.auto_reduce_start_pct = config.auto_reduce_start_pct
-            self.auto_reduce_maxloss_pct = config.auto_reduce_maxloss_pct
-            self.entry_during_autoreduce = config.entry_during_autoreduce
-            self.auto_reduce_marginbased_enabled = config.auto_reduce_marginbased_enabled
-            self.auto_reduce_wallet_exposure_pct = config.auto_reduce_wallet_exposure_pct
-            self.percentile_auto_reduce_enabled = config.percentile_auto_reduce_enabled
-            self.max_pos_balance_pct = config.max_pos_balance_pct
-            self.auto_leverage_upscale = config.auto_leverage_upscale
-        except AttributeError as e:
-            logging.error(f"Failed to initialize attributes from config: {e}")
 
     def _initialize_symbol_locks(self, symbols):
         for symbol in symbols or []:
@@ -217,6 +163,10 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
             max_qty_percent_short = self.config.linear_grid['max_qty_percent_short']
             min_outer_price_distance = self.config.linear_grid['min_outer_price_distance']
             max_outer_price_distance = self.config.linear_grid['max_outer_price_distance']
+            graceful_stop_long = self.config.linear_grid['graceful_stop_long']
+            graceful_stop_short = self.config.linear_grid['graceful_stop_short']
+            additional_entries_from_signal = self.config.linear_grid['additional_entries_from_signal']
+
             # reissue_threshold_inposition = self.config.linear_grid['reissue_threshold_inposition']
 
             volume_check = self.config.volume_check
@@ -454,23 +404,11 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
 
                 logging.info(f"Current long pos qty for {symbol} {long_pos_qty}")
                 logging.info(f"Current short pos qty for {symbol} {short_pos_qty}")
-
-                # # Check if a position has been closed
-                # if previous_long_pos_qty > 0 and long_pos_qty == 0:
-                #     logging.info(f"Long position closed for {symbol}. Canceling long grid orders.")
-                #     self.cancel_grid_orders(symbol, "buy")
-                #     #self.cleanup_before_termination(symbol)
-                #     break  # Exit the while loop, thus ending the thread
-
-                # if previous_short_pos_qty > 0 and short_pos_qty == 0:
-                #     logging.info(f"Short position closed for {symbol}. Canceling short grid orders.")
-                #     self.cancel_grid_orders(symbol, "sell")
-                #     #self.cleanup_before_termination(symbol)
-                #     break  # Exit the while loop, thus ending the thread
             
                 if previous_long_pos_qty > 0 and long_pos_qty == 0:
                     logging.info(f"Long position closed for {symbol}. Canceling long grid orders.")
                     self.cancel_grid_orders(symbol, "buy")
+                    self.active_long_grids.discard(symbol)
                     if short_pos_qty == 0:
                         logging.info(f"No open positions for {symbol}. Removing from shared symbols data.")
                         shared_symbols_data.pop(symbol, None)
@@ -479,6 +417,7 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                 elif previous_short_pos_qty > 0 and short_pos_qty == 0:
                     logging.info(f"Short position closed for {symbol}. Canceling short grid orders.")
                     self.cancel_grid_orders(symbol, "sell")
+                    self.active_short_grids.discard(symbol)
                     if long_pos_qty == 0:
                         logging.info(f"No open positions for {symbol}. Removing from shared symbols data.")
                         shared_symbols_data.pop(symbol, None)
@@ -501,7 +440,8 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                     shared_symbols_data.pop(symbol, None)
                     self.cancel_grid_orders(symbol, "buy")
                     self.cancel_grid_orders(symbol, "sell")
-                    self.active_grids.discard(symbol)
+                    self.active_long_grids.discard(symbol)
+                    self.active_short_grids.discard(symbol)
                     self.cleanup_before_termination(symbol)
                     logging.info("Both long and short operations have terminated. Exiting the loop.")
                     break
@@ -522,51 +462,6 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                 # Update previous quantities for the next iteration
                 previous_long_pos_qty = long_pos_qty
                 previous_short_pos_qty = short_pos_qty
-
-                # # Actions based on inactivity
-                # if inactive_long:
-                #     logging.info(f"No active long positions and previous positions were closed for {symbol}. Terminating long operations.")
-                #     self.running_long = False
-                #     self.cancel_grid_orders(symbol, "buy")
-                #     self.clear_grid(symbol, 'buy')
-                #     self.active_grids.discard(symbol)
-                #     #self.cleanup_before_termination(symbol)
-                    
-                #     # Remove symbol from shared_symbols_data if there are no active short positions
-                #     if short_pos_qty == 0:
-                #         shared_symbols_data.pop(symbol, None)
-                #         break
-
-                # if inactive_short:
-                #     logging.info(f"No active short positions and previous positions were closed for {symbol}. Terminating short operations.")
-                #     self.cancel_grid_orders(symbol, "sell")
-                #     self.clear_grid(symbol, 'sell')
-                #     self.active_grids.discard(symbol)
-                #     #self.cleanup_before_termination(symbol)
-                #     self.running_short = False
-                    
-                #     # Remove symbol from shared_symbols_data if there are no active long positions
-                #     if long_pos_qty == 0:
-                #         shared_symbols_data.pop(symbol, None)
-                #         break
-            
-                # terminate_long, terminate_short = self.should_terminate_open_orders(symbol, long_pos_qty, short_pos_qty, open_position_data, open_orders, current_time)
-
-                # logging.info(f"Terminate long: {terminate_long}, Terminate short: {terminate_short}")
-
-                # try:
-                #     if terminate_long:
-                #         logging.info(f"Should terminate long orders for {symbol}")
-                #         self.cancel_grid_orders(symbol, "buy")
-                #         self.cleanup_before_termination(symbol)
-                #         self.running_long = False  # Set the flag to stop the long thread
-                #     if terminate_short:
-                #         logging.info(f"Should terminate short orders for {symbol}")
-                #         self.cancel_grid_orders(symbol, "sell")
-                #         self.cleanup_before_termination(symbol)
-                #         self.running_short = False  # Set the flag to stop the short thread
-                # except Exception as e:
-                #     logging.info(f"Exception caught in termination {e}")
 
                 if not self.running_long and not self.running_short:
                     logging.info("Both long and short operations have ended. Preparing to exit loop.")
@@ -852,7 +747,8 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                     short_tp_counts = tp_order_counts['short_tp_count']
 
                     try:
-                        self.linear_grid_hardened_gridspan_ob_volumelevels_dynamictp_lsignal(
+                        #self.linear_grid_hardened_gridspan_ob_volumelevels_dynamictp_lsignal(
+                        self.lingrid_v2_gs(
                             symbol,
                             open_symbols,
                             total_equity,
@@ -884,7 +780,11 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                             tp_order_counts,
                             entry_during_autoreduce,
                             max_qty_percent_long,
-                            max_qty_percent_short
+                            max_qty_percent_short,
+                            graceful_stop_long,
+                            graceful_stop_short,
+                            additional_entries_from_signal,
+                            open_position_data
                         )
                     except Exception as e:
                         logging.info(f"Something is up with variables for the grid {e}")
