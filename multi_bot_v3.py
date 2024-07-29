@@ -490,6 +490,11 @@ def bybit_auto_rotation_spot(args, market_maker, manager, symbols_allowed):
             logging.info(f"Active symbols: {active_symbols}")
             logging.info(f"Active symbols updated. Symbols allowed: {symbols_allowed}")
 
+            # Filter out blacklisted symbols from active symbols
+            adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+            logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
+
+
             with thread_management_lock:
                 open_position_futures = []
                 for symbol in open_position_symbols:
@@ -849,6 +854,10 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
                 logging.info(f"Active symbols: {active_symbols}")
                 logging.info(f"Unique active symbols: {unique_active_symbols}")
 
+                # Filter out blacklisted symbols from active symbols
+                adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+                logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
+
                 for symbol in open_position_symbols.copy():
                     has_open_long = any(pos['side'].lower() == 'long' for pos in open_position_data if standardize_symbol(pos['symbol']) == symbol)
                     has_open_short = any(pos['side'].lower() == 'short' for pos in open_position_data if standardize_symbol(pos['symbol']) == symbol)
@@ -879,6 +888,10 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
                 logging.info(f"Active symbols count: {len(active_symbols)}")
                 logging.info(f"Unique active symbols count: {len(unique_active_symbols)}")
 
+                # Filter out blacklisted symbols from active symbols
+                adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+                logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
+
                 fresh_open_position_data = fetch_open_positions()
                 fresh_open_position_symbols = {standardize_symbol(pos['symbol']) for pos in fresh_open_position_data}
                 update_active_symbols(fresh_open_position_symbols)
@@ -887,6 +900,10 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
                 logging.info(f"Updated active long symbols ({len(active_long_symbols)}): {active_long_symbols}")
                 logging.info(f"Updated active short symbols ({len(active_short_symbols)}): {active_short_symbols}")
                 logging.info(f"Updated unique active symbols ({len(unique_active_symbols)}): {unique_active_symbols}")
+
+                # Filter out blacklisted symbols from active symbols
+                adjusted_active_symbols = {symbol for symbol in active_symbols if symbol not in blacklist}
+                logging.info(f"Adjusted Active symbols: {adjusted_active_symbols}")
 
                 if len(unique_active_symbols) < symbols_allowed:
                     logging.info(f"Unique active symbols are less than allowed, scanning for new symbols")
