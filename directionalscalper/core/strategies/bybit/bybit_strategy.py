@@ -13000,11 +13000,11 @@ class BybitStrategy(BaseStrategy):
                 buffer_distance_long = long_pos_price * buffer_percentage_long
                 
                 logging.info(f"[{symbol}] Long position info:")
-                logging.info(f"  - Long position price: {long_pos_price}")
-                logging.info(f"  - Long position quantity: {long_pos_qty}")
-                logging.info(f"  - Long distance from entry: {long_distance_from_entry}")
-                logging.info(f"  - Long buffer percentage: {buffer_percentage_long}")
-                logging.info(f"  - Long buffer distance: {buffer_distance_long}")
+                logging.info(f"  [{symbol}]:- Long position price: {long_pos_price}")
+                logging.info(f"  [{symbol}]:- Long position quantity: {long_pos_qty}")
+                logging.info(f"  [{symbol}]:- Long distance from entry: {long_distance_from_entry}")
+                logging.info(f"  [{symbol}]:- Long buffer percentage: {buffer_percentage_long}")
+                logging.info(f"  [{symbol}]:- Long buffer distance: {buffer_distance_long}")
                 
                 if abs(current_price - long_pos_price) > buffer_distance_long:
                     replace_long_grid = True
@@ -13018,11 +13018,11 @@ class BybitStrategy(BaseStrategy):
                 buffer_distance_short = short_pos_price * buffer_percentage_short
                 
                 logging.info(f"[{symbol}] Short position info:")
-                logging.info(f"  - Short position price: {short_pos_price}")
-                logging.info(f"  - Short position quantity: {short_pos_qty}")
-                logging.info(f"  - Short distance from entry: {short_distance_from_entry}")
-                logging.info(f"  - Short buffer percentage: {buffer_percentage_short}")
-                logging.info(f"  - Short buffer distance: {buffer_distance_short}")
+                logging.info(f"  [{symbol}]:- Short position price: {short_pos_price}")
+                logging.info(f"  [{symbol}]:- Short position quantity: {short_pos_qty}")
+                logging.info(f"  [{symbol}]:- Short distance from entry: {short_distance_from_entry}")
+                logging.info(f"  [{symbol}]:- Short buffer percentage: {buffer_percentage_short}")
+                logging.info(f"  [{symbol}]:- Short buffer distance: {buffer_distance_short}")
                 
                 if abs(current_price - short_pos_price) > buffer_distance_short:
                     replace_short_grid = True
@@ -13060,10 +13060,10 @@ class BybitStrategy(BaseStrategy):
 
                 logging.info(f"[{symbol}] Long position info:")
                 logging.info(f"Dynamic outer price distance: {dynamic_outer_price_distance * 100.0:.2f}%")
-                logging.info(f"  - Long position price: {long_pos_price}")
-                logging.info(f"  - Long position quantity: {long_pos_qty}")
-                logging.info(f"  - Required price move for reissue (long): {required_price_move_long_pct:.2f}%")
-                logging.info(f"  - Current price change percentage: {price_change_pct_long:.2f}%")
+                logging.info(f"  [{symbol}]:- Long position price: {long_pos_price}")
+                logging.info(f"  [{symbol}]:- Long position quantity: {long_pos_qty}")
+                logging.info(f"  [{symbol}]:- Required price move for reissue (long): {required_price_move_long_pct:.2f}%")
+                logging.info(f"  [{symbol}]:- Current price change percentage: {price_change_pct_long:.2f}%")
 
                 if price_change_pct_long > required_price_move_long_pct:
                     replace_long_grid = True
@@ -13076,10 +13076,10 @@ class BybitStrategy(BaseStrategy):
 
                 logging.info(f"[{symbol}] Short position info:")
                 logging.info(f"Dynamic outer price distance: {dynamic_outer_price_distance * 100.0:.2f}%")
-                logging.info(f"  - Short position price: {short_pos_price}")
-                logging.info(f"  - Short position quantity: {short_pos_qty}")
-                logging.info(f"  - Required price move for reissue (short): {required_price_move_short_pct:.2f}%")
-                logging.info(f"  - Current price change percentage: {price_change_pct_short:.2f}%")
+                logging.info(f"  [{symbol}]:- Short position price: {short_pos_price}")
+                logging.info(f"  [{symbol}]:- Short position quantity: {short_pos_qty}")
+                logging.info(f"  [{symbol}]:- Required price move for reissue (short): {required_price_move_short_pct:.2f}%")
+                logging.info(f"  [{symbol}]:- Current price change percentage: {price_change_pct_short:.2f}%")
 
                 if price_change_pct_short > required_price_move_short_pct:
                     replace_short_grid = True
@@ -13600,22 +13600,22 @@ class BybitStrategy(BaseStrategy):
 
             # Log the position utilization and the actual utilization based on total equity
             logging.info(f"Position utilization for {symbol}:")
-            logging.info(f"  - Long position exposure: {long_pos_exposure_percent:.2f}% of total equity")
-            logging.info(f"  - Short position exposure: {short_pos_exposure_percent:.2f}% of total equity")
+            logging.info(f"  [{symbol}]:- Long position exposure: {long_pos_exposure_percent:.2f}% of total equity")
+            logging.info(f"  [{symbol}]:- Short position exposure: {short_pos_exposure_percent:.2f}% of total equity")
 
             # Log detailed information about the configuration parameters and maximum allowed positions
             logging.info(f"Configuration for {symbol}:")
-            logging.info(f"  - Total equity: {total_equity:.2f} USD")
-            logging.info(f"  - Current price: {current_price:.8f} USD")
-            logging.info(f"  - Wallet exposure limit for long: {wallet_exposure_limit_long * 100:.2f}%")
-            logging.info(f"  - Wallet exposure limit for short: {wallet_exposure_limit_short * 100:.2f}%")
-            logging.info(f"  - Max quantity percentage for long: {max_qty_percent_long}%")
-            logging.info(f"  - Max quantity percentage for short: {max_qty_percent_short}%")
+            logging.info(f"  [{symbol}]:- Total equity: {total_equity:.2f} USD")
+            logging.info(f"  [{symbol}]:- Current price: {current_price:.8f} USD")
+            logging.info(f"  [{symbol}]:- Wallet exposure limit for long: {wallet_exposure_limit_long * 100:.2f}%")
+            logging.info(f"  [{symbol}]:- Wallet exposure limit for short: {wallet_exposure_limit_short * 100:.2f}%")
+            logging.info(f"  [{symbol}]:- Max quantity percentage for long: {max_qty_percent_long}%")
+            logging.info(f"  [{symbol}]:- Max quantity percentage for short: {max_qty_percent_short}%")
             logging.info(f"Maximum allowed positions for {symbol}:")
-            logging.info(f"  - Max quantity for long: {max_qty_long:.4f} units")
-            logging.info(f"  - Max quantity for short: {max_qty_short:.4f} units")
-            logging.info(f"{symbol} Long position quantity: {long_pos_qty}")
-            logging.info(f"{symbol} Short position quantity: {short_pos_qty}")
+            logging.info(f"  [{symbol}]:- Max quantity for long: {max_qty_long:.4f} units")
+            logging.info(f"  [{symbol}]:- Max quantity for short: {max_qty_short:.4f} units")
+            logging.info(f"[{symbol}]:- Long position quantity: {long_pos_qty}")
+            logging.info(f"[{symbol}]:- Short position quantity: {short_pos_qty}")
 
             # Check if current positions exceed the maximum allowed quantities
             if long_pos_exposure_percent > max_qty_percent_long:
