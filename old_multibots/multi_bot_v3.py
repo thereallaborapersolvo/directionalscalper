@@ -25,9 +25,7 @@ from api.manager import Manager
 
 from directionalscalper.core.exchanges import *
 
-import directionalscalper.core.strategies.bybit.notional.instantsignals as instant_signals
-import directionalscalper.core.strategies.bybit.notional as bybit_notional
-import directionalscalper.core.strategies.bybit.scalping as bybit_scalping
+import directionalscalper.core.strategies.bybit.gridbased as gridbased
 import directionalscalper.core.strategies.bybit.hedging as bybit_hedging
 from directionalscalper.core.strategies.binance import *
 from directionalscalper.core.strategies.huobi import *
@@ -207,23 +205,9 @@ class DirectionalMarketMaker:
                 logging.error(f"Error in printing info: {e}")
 
         strategy_classes = {
-            'bybit_1m_qfl_mfi_eri_walls': bybit_scalping.BybitMMOneMinuteQFLMFIERIWalls,
             'bybit_1m_qfl_mfi_eri_autohedge_walls_atr': bybit_hedging.BybitMMOneMinuteQFLMFIERIAutoHedgeWallsATR,
-            'bybit_mfirsi_imbalance': bybit_scalping.BybitMFIRSIERIOBImbalance,
-            'bybit_mfirsi_quickscalp': bybit_scalping.BybitMFIRSIQuickScalp,
-            'qsematrend': bybit_scalping.BybitQuickScalpEMATrend,
-            'qstrend_dca': bybit_scalping.BybitQuickScalpTrendDCA,
-            'mfieritrend': bybit_scalping.BybitMFIERILongShortTrend,
-            'qstrendlongonly': bybit_scalping.BybitMFIRSIQuickScalpLong,
-            'qstrendshortonly': bybit_scalping.BybitMFIRSIQuickScalpShort,
-            'qstrend_unified': bybit_scalping.BybitQuickScalpUnified,
-            'basicgrid': bybit_scalping.BybitBasicGrid,
-            'qstrendspot': bybit_scalping.BybitQuickScalpTrendSpot,
-            'qsgridinstantsignal': instant_signals.BybitDynamicGridSpanOBSRStaticIS,
-            'qsgriddynmaicgridspaninstant': instant_signals.BybitDynamicGridSpanIS,
-            #'qsgridob': instant_signals.BybitDynamicGridSpanOBLevels,
-            'qstrendobdynamictp': instant_signals.BybitQuickScalpTrendDynamicTP,
-            'qsgridob': instant_signals.BybitDynamicGridSpanOBLevelsLSignal
+            'qstrendobdynamictp': gridbased.BybitQuickScalpTrendDynamicTP,
+            'qsgridob': gridbased.LinearGridBaseFutures
         }
 
         strategy_class = strategy_classes.get(strategy_name.lower())
@@ -1297,14 +1281,6 @@ def fetch_updated_symbols(args, manager):
         potential_bearish_symbols = manager.get_bearish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
         potential_symbols = potential_bullish_symbols + potential_bearish_symbols
     elif strategy == 'basicgridmfirsi':
-        potential_bullish_symbols = manager.get_bullish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
-        potential_bearish_symbols = manager.get_bearish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
-        potential_symbols = potential_bullish_symbols + potential_bearish_symbols
-    elif strategy == 'basicgridmfipersist':
-        potential_bullish_symbols = manager.get_bullish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
-        potential_bearish_symbols = manager.get_bearish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
-        potential_symbols = potential_bullish_symbols + potential_bearish_symbols
-    elif strategy == 'basicgridpersistnotional':
         potential_bullish_symbols = manager.get_bullish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
         potential_bearish_symbols = manager.get_bearish_rotator_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
         potential_symbols = potential_bullish_symbols + potential_bearish_symbols

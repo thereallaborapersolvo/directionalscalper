@@ -36,23 +36,25 @@
         "dashboard_enabled": false,
         "shared_data_path": "data/",
         "linear_grid": {
+            "grid_behavior": "infinite",
+            "drawdown_behavior": "maxqtypercent",
             "target_coins_mode": false,
             "auto_graceful_stop": true,
             "entry_signal_type": "lorentzian",
             "additional_entries_from_signal": true,
             "graceful_stop_long": false,
             "graceful_stop_short": false,
-            "max_qty_percent_long": 10,
-            "max_qty_percent_short": 10,
+            "max_qty_percent_long": 30,
+            "max_qty_percent_short": 30,
             "auto_reduce_cooldown_enabled": false,
             "auto_reduce_cooldown_start_pct": 0.051,
-            "wallet_exposure_limit_long": 0.010,
-            "wallet_exposure_limit_short": 0.003,
-            "levels": 3,
+            "wallet_exposure_limit_long": 0.006,
+            "wallet_exposure_limit_short": 0.002,
+            "levels": 4,
             "strength": 1.4,
             "outer_price_distance": 0.059,
             "min_outer_price_distance": 0.019,
-            "max_outer_price_distance": 0.039,
+            "max_outer_price_distance": 0.049,
             "long_mode": true,
             "short_mode": true,
             "reissue_threshold": 0.001,
@@ -93,12 +95,7 @@
             "name": "bybit_unified",
             "account_name": "account_3",
             "symbols_allowed": 5
-        },
-        {
-          "name": "bitget",
-          "account_name": "account_4",
-          "symbols_allowed": 5
-      }
+        }
     ],
     "logger": {
         "level": "info"

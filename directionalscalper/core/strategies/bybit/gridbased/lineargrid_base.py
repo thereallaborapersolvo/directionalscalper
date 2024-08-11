@@ -13,11 +13,11 @@ from directionalscalper.core.strategies.bybit.bybit_strategy import BybitStrateg
 from directionalscalper.core.exchanges.bybit import BybitExchange
 from directionalscalper.core.strategies.logger import Logger
 from live_table_manager import shared_symbols_data
-logging = Logger(logger_name="BybitDynamicGridSpanOBLevelsLSignal", filename="BybitDynamicGridSpanOBLevelsLSignal.log", stream=True)
+logging = Logger(logger_name="LinearGridBase", filename="LinearGridBase.log", stream=True)
 
 symbol_locks = {}
 
-class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
+class LinearGridBaseFutures(BybitStrategy):
     def __init__(self, exchange, manager, config, symbols_allowed=None, rotator_symbols_standardized=None, mfirsi_signal=None):
         super().__init__(exchange, config, manager, symbols_allowed)
         self.mfirsi_signal = mfirsi_signal
@@ -167,6 +167,9 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
             graceful_stop_short = self.config.linear_grid['graceful_stop_short']
             additional_entries_from_signal = self.config.linear_grid['additional_entries_from_signal']
 
+            grid_behavior = self.config.linear_grid.get('grid_behavior', 'infinite')
+            drawdown_behavior = self.config.linear_grid.get('drawdown_behavior', 'maxqtypercent')
+
             # reissue_threshold_inposition = self.config.linear_grid['reissue_threshold_inposition']
 
             volume_check = self.config.volume_check
@@ -247,10 +250,10 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
 
                 leverage_tiers = self.exchange.fetch_leverage_tiers(symbol)
 
-                if leverage_tiers:
-                    logging.info(f"Leverage tiers for {symbol}: {leverage_tiers}")
-                else:
-                    logging.error(f"Failed to fetch leverage tiers for {symbol}.")
+                # if leverage_tiers:
+                #     logging.info(f"Leverage tiers for {symbol}: {leverage_tiers}")
+                # else:
+                #     logging.error(f"Failed to fetch leverage tiers for {symbol}.")
 
 
                 logging.info(f"Max USD value: {self.max_usd_value}")
@@ -749,8 +752,7 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                     short_tp_counts = tp_order_counts['short_tp_count']
 
                     try:
-                        #self.linear_grid_hardened_gridspan_ob_volumelevels_dynamictp_lsignal(
-                        self.lingrid_v2_gs(
+                        self.lineargrid_base(
                             symbol,
                             open_symbols,
                             total_equity,
@@ -783,7 +785,9 @@ class BybitDynamicGridSpanOBLevelsLSignal(BybitStrategy):
                             graceful_stop_long,
                             graceful_stop_short,
                             additional_entries_from_signal,
-                            open_position_data
+                            open_position_data,
+                            drawdown_behavior,
+                            grid_behavior
                         )
                     except Exception as e:
                         logging.info(f"Something is up with variables for the grid {e}")
