@@ -265,7 +265,7 @@ class BybitStrategy(BaseStrategy):
         """
         try:
             order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, price, reduceOnly=reduce_only, orderLinkId=tag)
-            logging.info(f"Placed {side} order at {price} with tag {tag} and amount {amount}")
+            logging.info(f"[{symbol}] Placed {side} order at {price} with tag {tag} and amount {amount}")
             return order.get('id', None) if order else None
         except Exception as e:
             logging.info(f"Error placing {side} order at {price} with tag {tag}: {e}")
@@ -507,7 +507,7 @@ class BybitStrategy(BaseStrategy):
                     self.bybit_hedge_placetp_maker(symbol, amount, current_price, positionIdx=1, order_side="sell", open_orders=open_orders)
                     #self.exchange.place_order(symbol, order_type, amount, current_price, take_profit=True)
 
-                    logging.info(f"Placed take profit order for stale position: {symbol} at price: {current_price}")
+                    logging.info(f"[{symbol}] Placed take profit order for stale position: {symbol} at price: {current_price}")
 
     def cancel_stale_orders_bybit(self, symbol):
         current_time = time.time()
@@ -12542,6 +12542,9 @@ class BybitStrategy(BaseStrategy):
             current_price = self.exchange.get_current_price(symbol)
             last_price = self.last_price.get(symbol)
             
+            # Log the incoming parameters for better traceability
+            logging.info(f"[{symbol}] Input parameters - reissue_threshold: {reissue_threshold}, initial_entry_buffer_pct: {initial_entry_buffer_pct}, long_pos_qty: {long_pos_qty}, short_pos_qty: {short_pos_qty}")
+            
             if last_price is None:
                 self.last_price[symbol] = current_price
                 logging.info(f"[{symbol}] No last price recorded. Setting current price {current_price} as last price. No reissue required.")
@@ -12552,6 +12555,7 @@ class BybitStrategy(BaseStrategy):
             
             # Adjust threshold by initial buffer percentage correctly
             adjusted_reissue_threshold = reissue_threshold + (reissue_threshold * initial_entry_buffer_pct / 100)
+            logging.info(f"[{symbol}] Adjusted reissue threshold: {adjusted_reissue_threshold:.5f}% (Initial: {reissue_threshold}%, Buffer: {initial_entry_buffer_pct}%)")
             
             # Define a small threshold to determine if the position is effectively zero
             position_threshold = 0.00001
@@ -12654,7 +12658,7 @@ class BybitStrategy(BaseStrategy):
                 try:
                     order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
                     if order and 'id' in order:
-                        logging.info(f"Placed {side} order at level {level} for {symbol} with amount {amount}")
+                        logging.info(f"[{symbol}] Placed {side} order at level {level} for {symbol} with amount {amount}")
                         filled_levels.add(level)  # Add the level to filled_levels
                     else:
                         logging.info(f"Failed to place {side} order at level {level} for {symbol} with amount {amount}")
@@ -12662,6 +12666,14 @@ class BybitStrategy(BaseStrategy):
                     logging.info(f"Exception when placing {side} order at level {level} for {symbol}: {e}")
             else:
                 logging.info(f"Skipping {side} order at level {level} for {symbol} as it already exists.")
+
+        # Update last reissue prices
+        if is_long:
+            self.last_reissue_price_long[symbol] = current_price
+            logging.info(f"Updated last reissue price for long orders of {symbol} to {current_price}")
+        else:
+            self.last_reissue_price_short[symbol] = current_price
+            logging.info(f"Updated last reissue price for short orders of {symbol} to {current_price}")
 
         logging.info(f"[{symbol}] {side.capitalize()} grid orders issued for unfilled levels.")
 
@@ -12712,7 +12724,7 @@ class BybitStrategy(BaseStrategy):
         
         # Calculate the maximum position value based on total equity, wallet exposure limit, and user-defined leverage
         max_position_value = total_equity * wallet_exposure_limit * user_defined_leverage
-        logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+        logging.info(f"Maximum {side} position value for {symbol}: {max_position_value}")
         
         if enforce_full_grid:
             # Calculate the total amount based on the maximum position value and number of levels
@@ -12721,12 +12733,12 @@ class BybitStrategy(BaseStrategy):
             # Calculate the total amount as a multiple of the minimum quantity USD value
             total_amount = max(max_position_value // min_qty_usd_value, 1) * min_qty_usd_value
         
-        logging.info(f"Calculated total amount for {symbol}: {total_amount}")
+        logging.info(f"[{symbol}] Calculated total notional amount for {side} side: {total_amount}")
         
         return total_amount
 
     def calculate_order_amounts(self, symbol: str, total_amount: float, levels: int, strength: float, qty_precision: float, min_qty: float, enforce_full_grid: bool) -> List[float]:
-        logging.info(f"Calculating order amounts for {symbol} with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, min_qty: {min_qty}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"[{symbol}] Calculating order amounts with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, min_qty: {min_qty}, enforce_full_grid: {enforce_full_grid}")
         
         # Calculate the order amounts based on the strength
         amounts = []
@@ -12804,7 +12816,7 @@ class BybitStrategy(BaseStrategy):
 
         wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
         max_position_value = total_equity * wallet_exposure_limit
-        logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+        logging.info(f"[{symbol}] Maximum position value : {max_position_value}")
 
         if enforce_full_grid:
             required_notional = max_position_value / levels
@@ -12819,13 +12831,13 @@ class BybitStrategy(BaseStrategy):
         adjusted_max_position_value = max_position_value - current_pos_value
         total_notional_amount = min(required_notional, adjusted_max_position_value)
         
-        logging.info(f"Calculated total notional amount for {symbol}: {total_notional_amount}")
+        logging.info(f"[{symbol}] Calculated total notional amount for {side} side: {total_notional_amount}")
         return total_notional_amount
 
     def calculate_order_amounts_notional_properdca(self, symbol: str, total_amount: float, levels: int, 
                                                     strength: float, qty_precision: float, enforce_full_grid: bool,
                                                     long_pos_qty=0, short_pos_qty=0, side='buy') -> List[float]:
-        logging.info(f"Calculating order amounts for {symbol} with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"[{symbol}] Calculating order amounts with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
         
         current_price = self.exchange.get_current_price(symbol)
         amounts = []
@@ -12843,23 +12855,32 @@ class BybitStrategy(BaseStrategy):
 
         # Adjust for current position
         total_amount_adjusted = total_amount + (current_position_qty * current_price)
-        logging.info(f"Total amount adjusted for current position: {total_amount_adjusted}")
+        logging.info(f"[{symbol}] Total amount adjusted for current {side} position : {total_amount_adjusted}")
 
         for i in range(levels):
             notional_amount = (level_notional[i] / total_ratio) * total_amount_adjusted
             quantity = notional_amount / current_price
-            logging.info(f"Level {i+1} - Initial quantity: {quantity}")
+            logging.info(f"[{symbol}] Level {i+1} - Initial quantity: {quantity}")
             
-            # Determine the minimum quantity to use (either min_notional or min_qty)
-            min_quantity = max(base_notional / current_price, min_qty)
+            # No rounding or min_quantity enforcement, just add the initial quantity
             
-            # Apply the minimum quantity requirement
-            rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_quantity)
-            logging.info(f"Level {i+1} - Rounded quantity: {rounded_quantity}")
+            # # Determine the minimum quantity to use (either min_notional or min_qty)
+            # min_quantity = max(base_notional / current_price, min_qty)
+            
+            # # Apply the minimum quantity requirement
+            # rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_quantity)
+            # logging.info(f"[{symbol}] Level {i+1} - Rounded quantity: {rounded_quantity}")
+            
+            # amounts.append(rounded_quantity)
+
+            # Set the rounded_quantity to be the same as the initial quantity
+            # 'lapbper - this is section to use initial quantity instead of rounded one
+            rounded_quantity = quantity
+            logging.info(f"[{symbol}] Level {i+1} - Rounded quantity (same as initial): {rounded_quantity}")
             
             amounts.append(rounded_quantity)
 
-        logging.info(f"Calculated order amounts for {symbol}: {amounts}")
+        logging.info(f"Calculated order amounts for {symbol} with side {side}: {amounts}")
         
         # Adjust amounts if they are all the same when enforce_full_grid is True
         if enforce_full_grid and len(set(amounts)) == 1:
@@ -12901,7 +12922,7 @@ class BybitStrategy(BaseStrategy):
             short_pos_exposure_percent = (short_pos_qty * current_price / total_equity) * 100
 
             # Log the position utilization and the actual utilization based on total equity
-            logging.info(f"Position utilization for {symbol}:")
+            logging.info(f"[{symbol}]:- Position utilization: ")
             logging.info(f"  [{symbol}]:- Long position exposure: {long_pos_exposure_percent:.2f}% of total equity")
             logging.info(f"  [{symbol}]:- Short position exposure: {short_pos_exposure_percent:.2f}% of total equity")
 
@@ -12946,26 +12967,26 @@ class BybitStrategy(BaseStrategy):
                                             wallet_exposure_limit_long, wallet_exposure_limit_short, 
                                             side, levels, enforce_full_grid, 
                                             user_defined_leverage_long=None, user_defined_leverage_short=None):
-        logging.info(f"Calculating total amount for {symbol} with total_equity: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"[{symbol}] Calculating total amount with total_equity: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
 
         leverage_used = user_defined_leverage_long if side == 'buy' and user_defined_leverage_long not in (0, None) else \
                         user_defined_leverage_short if side == 'sell' and user_defined_leverage_short not in (0, None) else \
                         self.exchange.get_current_max_leverage_bybit(symbol)
-        logging.info(f"Using leverage for {symbol}: {leverage_used}")
+        logging.info(f"[{symbol}] Using leverage of: {leverage_used}")
 
         wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
         max_position_value = total_equity * wallet_exposure_limit * leverage_used
-        logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+        logging.info(f"[{symbol}] Maximum {side} position value: {max_position_value}")
 
         base_notional = self.min_notional(symbol)
         required_notional = base_notional * levels if enforce_full_grid else max_position_value
         total_notional_amount = min(required_notional, max_position_value)
 
-        logging.info(f"Calculated total notional amount for {symbol}: {total_notional_amount}")
+        logging.info(f"[{symbol}] Calculated total notional amount for {side} side: {total_notional_amount}")
         return total_notional_amount
 
     def calculate_order_amounts_notional(self, symbol: str, total_amount: float, levels: int, strength: float, qty_precision: float, enforce_full_grid: bool) -> List[float]:
-        logging.info(f"Calculating order amounts for {symbol} with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"[{symbol}] Calculating order amounts with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
         
         current_price = self.exchange.get_current_price(symbol)
         amounts = []
@@ -12981,7 +13002,7 @@ class BybitStrategy(BaseStrategy):
             rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_base_notional)
             amounts.append(rounded_quantity)
 
-        logging.info(f"Calculated order amounts for {symbol}: {amounts}")
+        logging.info(f"[{symbol}] Calculated order amounts with side {side}: {amounts}")
         return amounts
 
     def initiate_spread_entry(self, symbol, open_orders, long_dynamic_amount, short_dynamic_amount, long_pos_qty, short_pos_qty):
