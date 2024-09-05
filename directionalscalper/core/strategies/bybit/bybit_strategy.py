@@ -117,29 +117,29 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
                 best_bid_price = order_book['bids'][0][0] if 'bids' in order_book else self.last_known_bid.get(symbol)
 
                 if self.hotkey_flags["enter_long"] and long_pos_qty == 0 and not self.entry_order_exists(open_orders, "buy"):
-                    logging.info(f"Placing initial long entry order for {symbol} due to hotkey")
+                    logging.info(f"Placing initial long entry order for [{symbol}] due to hotkey")
                     self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                     self.hotkey_flags["enter_long"] = False
 
                 if self.hotkey_flags["take_profit_long"] and long_pos_qty > 0:
-                    logging.info(f"Taking profit on long position for {symbol} due to hotkey")
+                    logging.info(f"Taking profit on long position for [{symbol}] due to hotkey")
                     self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, upnl_profit_pct, open_orders)
                     self.hotkey_flags["take_profit_long"] = False
 
                 if self.hotkey_flags["enter_short"] and short_pos_qty == 0 and not self.entry_order_exists(open_orders, "sell"):
-                    logging.info(f"Placing initial short entry order for {symbol} due to hotkey")
+                    logging.info(f"Placing initial short entry order for [{symbol}] due to hotkey")
                     self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                     self.hotkey_flags["enter_short"] = False
 
                 if self.hotkey_flags["take_profit_short"] and short_pos_qty > 0:
-                    logging.info(f"Taking profit on short position for {symbol} due to hotkey")
+                    logging.info(f"Taking profit on short position for [{symbol}] due to hotkey")
                     self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, upnl_profit_pct, open_orders)
                     self.hotkey_flags["take_profit_short"] = False
 
@@ -213,7 +213,7 @@ class BybitStrategy(BaseStrategy):
                 self.max_short_trade_qty_per_symbol[symbol]
             )
 
-        logging.info(f"Updated dynamic amounts for {symbol}. New long_dynamic_amount: {self.long_dynamic_amount[symbol]}, New short_dynamic_amount: {self.short_dynamic_amount[symbol]}")
+        logging.info(f"Updated dynamic amounts for [{symbol}]. New long_dynamic_amount: {self.long_dynamic_amount[symbol]}, New short_dynamic_amount: {self.short_dynamic_amount[symbol]}")
     
     def get_open_symbols(self):
         open_position_data = self.retry_api_call(self.exchange.get_all_open_positions_bybit)
@@ -260,7 +260,7 @@ class BybitStrategy(BaseStrategy):
             return order
 
         except Exception as e:
-            logging.error(f"Error placing reduce-only limit order for {symbol}: {e}")
+            logging.error(f"Error placing reduce-only limit order for [{symbol}]: {e}")
             raise
 
 
@@ -284,7 +284,7 @@ class BybitStrategy(BaseStrategy):
             adjusted_dynamic_amount = max(dynamic_amount, min_qty)
             adjusted_dynamic_amount = round(adjusted_dynamic_amount, qty_precision_level)
             
-            tag = f"auto_reduce_{position_type}_{symbol}_{step_price}_{i}"
+            tag = f"auto_reduce_{position_type}_[{symbol}]_{step_price}_{i}"
             self.place_tagged_limit_order(symbol, 'sell' if position_type == 'long' else 'buy', adjusted_dynamic_amount, step_price, True, tag)
 
     def calculate_step_price(self, position_type, market_price, price_interval, level):
@@ -313,7 +313,7 @@ class BybitStrategy(BaseStrategy):
 
     def check_symbol_inactivity(self, symbol, inactive_time_threshold):
         current_time = time.time()
-        logging.info(f"Checking inactivity for {symbol} at {current_time}")
+        logging.info(f"Checking inactivity for [{symbol}] at {current_time}")
 
         # Check if the symbol has open positions
         open_position_data = self.retry_api_call(self.exchange.get_all_open_positions_bybit)
@@ -324,14 +324,14 @@ class BybitStrategy(BaseStrategy):
         has_open_long_position = long_pos_qty > 0
         has_open_short_position = short_pos_qty > 0
 
-        logging.info(f"Open positions for {symbol} - Long: {'found' if has_open_long_position else 'none'}, Short: {'found' if has_open_short_position else 'none'}")
+        logging.info(f"Open positions for [{symbol}] - Long: {'found' if has_open_long_position else 'none'}, Short: {'found' if has_open_short_position else 'none'}")
 
         # Check if the symbol has open orders
         open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
         has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
         has_open_short_order = any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)
 
-        logging.info(f"Open orders for {symbol} - Long: {'found' if has_open_long_order else 'none'}, Short: {'found' if has_open_short_order else 'none'}")
+        logging.info(f"Open orders for [{symbol}] - Long: {'found' if has_open_long_order else 'none'}, Short: {'found' if has_open_short_order else 'none'}")
 
         # Determine inactivity and handle accordingly
         if not has_open_long_position and not has_open_long_order:
@@ -348,9 +348,9 @@ class BybitStrategy(BaseStrategy):
         if symbol in self.last_activity_time:
             last_activity_time = self.last_activity_time[symbol]
             inactive_time = current_time - last_activity_time
-            logging.info(f"{symbol} ({side}) last active {inactive_time} seconds ago")
+            logging.info(f"[{symbol}] ({side}) last active {inactive_time} seconds ago")
             if inactive_time >= inactive_time_threshold and previous_qty > 0:
-                logging.info(f"{symbol} ({side}) has been inactive for {inactive_time} seconds, exceeding threshold of {inactive_time_threshold} seconds")
+                logging.info(f"[{symbol}] ({side}) has been inactive for {inactive_time} seconds, exceeding threshold of {inactive_time_threshold} seconds")
                 if side == 'long':
                     self.cancel_grid_orders(symbol, 'buy')
                     self.active_long_grids.discard(symbol)
@@ -362,17 +362,17 @@ class BybitStrategy(BaseStrategy):
                 return True
         else:
             self.last_activity_time[symbol] = current_time
-            logging.info(f"Recording initial activity time for {symbol} ({side})")
+            logging.info(f"Recording initial activity time for [{symbol}] ({side})")
         return False
 
     def check_position_inactivity(self, symbol, inactive_pos_time_threshold, long_pos_qty, short_pos_qty, previous_long_pos_qty, previous_short_pos_qty):
         current_time = time.time()
-        logging.info(f"Checking position inactivity for {symbol} at {current_time}")
+        logging.info(f"Checking position inactivity for [{symbol}] at {current_time}")
 
         has_open_long_position = long_pos_qty > 0
         has_open_short_position = short_pos_qty > 0
 
-        logging.info(f"Open positions status for {symbol} - Long: {'found' if has_open_long_position else 'none'}, Short: {'found' if has_open_short_position else 'none'}")
+        logging.info(f"Open positions status for [{symbol}] - Long: {'found' if has_open_long_position else 'none'}, Short: {'found' if has_open_short_position else 'none'}")
 
         # Determine inactivity and handle accordingly
         if not has_open_long_position:
@@ -393,26 +393,26 @@ class BybitStrategy(BaseStrategy):
             # Check for the presence of the symbol in open positions
             has_position = any(normalized_symbol in pos['symbol'].replace('/', '') for pos in open_positions_data)
 
-            logging.info(f"{symbol} has position: {has_position}")
+            logging.info(f"[{symbol}] has position: {has_position}")
 
             # Filter active orders
             active_orders = [order for order in open_orders if not order.get('reduceOnly', False)]
 
-            #logging.info(f"Active orders for {symbol}: {active_orders}")
+            #logging.info(f"Active orders for [{symbol}]: {active_orders}")
 
             # Identify active long and short orders
             long_orders = [order for order in active_orders if order['side'] == 'buy']
             short_orders = [order for order in active_orders if order['side'] == 'sell']
 
-            # logging.info(f"Long orders for {symbol} {long_orders}")
-            # logging.info(f"Short orders for {symbol} {short_orders}")
+            # logging.info(f"Long orders for [{symbol}] {long_orders}")
+            # logging.info(f"Short orders for [{symbol}] {short_orders}")
             
             # Determine if orders should be terminated
             should_terminate_long = long_orders and not has_position and long_pos_qty == 0
             should_terminate_short = short_orders and not has_position and short_pos_qty == 0
 
-            logging.info(f"Should terminate long for {symbol} {should_terminate_long}")
-            logging.info(f"Should terminate short for {symbol} {should_terminate_short}")
+            logging.info(f"Should terminate long for [{symbol}] {should_terminate_long}")
+            logging.info(f"Should terminate short for [{symbol}] {should_terminate_short}")
 
             terminate_long = False
             terminate_short = False
@@ -423,7 +423,7 @@ class BybitStrategy(BaseStrategy):
                     self.exchange.last_active_long_order_time[symbol] = current_time
                 elif current_time - self.exchange.last_active_long_order_time[symbol] > self.order_inactive_threshold:
                     terminate_long = True
-                    logging.info(f"Terminate long for {symbol} : {terminate_long}")
+                    logging.info(f"Terminate long for [{symbol}] : {terminate_long}")
             else:
                 if symbol in self.exchange.last_active_long_order_time:
                     del self.exchange.last_active_long_order_time[symbol]
@@ -433,7 +433,7 @@ class BybitStrategy(BaseStrategy):
                     self.exchange.last_active_short_order_time[symbol] = current_time
                 elif current_time - self.exchange.last_active_short_order_time[symbol] > self.order_inactive_threshold:
                     terminate_short = True
-                    logging.info(f"Terminate short for {symbol} : {terminate_short}")
+                    logging.info(f"Terminate short for [{symbol}] : {terminate_short}")
             else:
                 if symbol in self.exchange.last_active_short_order_time:
                     del self.exchange.last_active_short_order_time[symbol]
@@ -456,25 +456,25 @@ class BybitStrategy(BaseStrategy):
                 if not hasattr(self, 'position_closed_time'):
                     self.position_closed_time = current_time
                 elif current_time - self.position_closed_time > self.position_inactive_threshold:
-                    logging.info(f"Position for {symbol} has been inactive for more than {self.position_inactive_threshold} seconds.")
+                    logging.info(f"Position for [{symbol}] has been inactive for more than {self.position_inactive_threshold} seconds.")
                     return True
 
             if not hasattr(self, 'last_entry_signal_time'):
                 self.last_entry_signal_time = current_time
             elif current_time - self.last_entry_signal_time > self.no_entry_signal_threshold:
-                logging.info(f"No entry signal for {symbol} in the last {self.no_entry_signal_threshold} seconds.")
+                logging.info(f"No entry signal for [{symbol}] in the last {self.no_entry_signal_threshold} seconds.")
                 return True
             else:
                 if hasattr(self, 'position_closed_time'):
                     del self.position_closed_time
 
             if previous_long_pos_qty > 0 and long_pos_qty == 0:
-                logging.info(f"Long position closed for {symbol}. Canceling long grid orders.")
+                logging.info(f"Long position closed for [{symbol}]. Canceling long grid orders.")
                 self.cancel_grid_orders(symbol, "buy")
                 return True
 
             if previous_short_pos_qty > 0 and short_pos_qty == 0:
-                logging.info(f"Short position closed for {symbol}. Canceling short grid orders.")
+                logging.info(f"Short position closed for [{symbol}]. Canceling short grid orders.")
                 self.cancel_grid_orders(symbol, "sell")
                 return True
 
@@ -486,7 +486,7 @@ class BybitStrategy(BaseStrategy):
             if not hasattr(self, 'position_closed_time'):
                 self.position_closed_time = current_time
             elif current_time - self.position_closed_time > self.position_inactive_threshold:
-                logging.info(f"Position for {symbol} has been inactive for more than {self.position_inactive_threshold} seconds.")
+                logging.info(f"Position for [{symbol}] has been inactive for more than {self.position_inactive_threshold} seconds.")
                 return True
         else:
             if hasattr(self, 'position_closed_time'):
@@ -511,7 +511,7 @@ class BybitStrategy(BaseStrategy):
             try:
                 if best_ask_price < ma_1m_3_high or best_ask_price < ma_5m_3_high:
                     self.exchange.cancel_all_entries_bybit(symbol)
-                    logging.info(f"Canceled entry orders for {symbol}")
+                    logging.info(f"Canceled entry orders for [{symbol}]")
                     time.sleep(0.05)
             except Exception as e:
                 logging.info(f"An error occurred while canceling entry orders: {e}")
@@ -547,7 +547,7 @@ class BybitStrategy(BaseStrategy):
                     self.bybit_hedge_placetp_maker(symbol, amount, current_price, positionIdx=1, order_side="sell", open_orders=open_orders)
                     #self.exchange.place_order(symbol, order_type, amount, current_price, take_profit=True)
 
-                    logging.info(f"[{symbol}] Placed take profit order for stale position: {symbol} at price: {current_price}")
+                    logging.info(f"[{symbol}] Placed take profit order for stale position: [{symbol}] at price: {current_price}")
 
     def cancel_stale_orders_bybit(self, symbol):
         current_time = time.time()
@@ -556,16 +556,16 @@ class BybitStrategy(BaseStrategy):
 
         # Directly cancel orders for the given symbol
         self.exchange.cancel_all_open_orders_bybit(symbol)
-        logging.info(f"Stale orders for {symbol} canceled")
+        logging.info(f"Stale orders for [{symbol}] canceled")
 
         self.last_stale_order_check_time = current_time  # Update the last check time
 
     def cancel_all_orders_for_symbol_bybit(self, symbol):
         try:
             self.exchange.cancel_all_open_orders_bybit(symbol)
-            logging.info(f"All orders for {symbol} canceled")
+            logging.info(f"All orders for [{symbol}] canceled")
         except Exception as e:
-            logging.info(f"An error occurred while canceling all orders for {symbol}: {e}")
+            logging.info(f"An error occurred while canceling all orders for [{symbol}]: {e}")
 
     def get_all_open_orders_bybit(self):
         """
@@ -585,7 +585,7 @@ class BybitStrategy(BaseStrategy):
         # Cancel entries
         try:
             self.exchange.cancel_all_entries_bybit(symbol)
-            logging.info(f"Canceled entry orders for {symbol}")
+            logging.info(f"Canceled entry orders for [{symbol}]")
             time.sleep(0.05)
         except Exception as e:
             logging.info(f"An error occurred while canceling entry orders: {e}")
@@ -655,26 +655,26 @@ class BybitStrategy(BaseStrategy):
                             self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, tp_price, positionIdx=positionIdx, reduce_only=True)
                             logging.info(f"New {order_side.capitalize()} TP set at current/best price {tp_price} as current price has surpassed the max TP")
                         except Exception as e:
-                            logging.info(f"Failed to set new {order_side} TP for {symbol} at current/best price. Error: {e}")
+                            logging.info(f"Failed to set new {order_side} TP for [{symbol}] at current/best price. Error: {e}")
                     else:
                         try:
                             self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_min, positionIdx=positionIdx, reduce_only=True)
                             logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_min} using a normal limit order")
                         except Exception as e:
-                            logging.info(f"Failed to set new {order_side} TP for {symbol} using a normal limit order. Error: {e}")
+                            logging.info(f"Failed to set new {order_side} TP for [{symbol}] using a normal limit order. Error: {e}")
                 else:
                     try:
                         self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_max, positionIdx=positionIdx, reduce_only=True)
                         logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_max} using a post-only order")
                     except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for {symbol} using a post-only order. Error: {e}")
+                        logging.info(f"Failed to set new {order_side} TP for [{symbol}] using a post-only order. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for {symbol}")
+                logging.info(f"Skipping TP update as a TP order already exists for [{symbol}]")
 
             # Calculate and return the next update time
             return self.calculate_next_update_time()
         else:
-            logging.info(f"No immediate update needed for TP orders for {symbol}. Last update at: {last_tp_update}")
+            logging.info(f"No immediate update needed for TP orders for [{symbol}]. Last update at: {last_tp_update}")
             return last_tp_update
         
     def update_quickscalp_tp(self, symbol, pos_qty, upnl_profit_pct, short_pos_price, long_pos_price, positionIdx, order_side, last_tp_update, tp_order_counts, open_orders, max_retries=10):
@@ -717,21 +717,21 @@ class BybitStrategy(BaseStrategy):
                         self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
                         logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price} using a normal limit order")
                     except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for {symbol} using a normal limit order. Error: {e}")
+                        logging.info(f"Failed to set new {order_side} TP for [{symbol}] using a normal limit order. Error: {e}")
                 else:
                     # If the current price hasn't surpassed the new TP price, use a post-only order
                     try:
                         self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
                         logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price} using a post-only order")
                     except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for {symbol} using a post-only order. Error: {e}")
+                        logging.info(f"Failed to set new {order_side} TP for [{symbol}] using a post-only order. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for {symbol}")
+                logging.info(f"Skipping TP update as a TP order already exists for [{symbol}]")
 
             # Calculate and return the next update time
             return self.calculate_next_update_time()
         else:
-            logging.info(f"No immediate update needed for TP orders for {symbol}. Last update at: {last_tp_update}")
+            logging.info(f"No immediate update needed for TP orders for [{symbol}]. Last update at: {last_tp_update}")
             return last_tp_update
 
     def calculate_quickscalp_long_take_profit_dynamic_distance(self, long_pos_price, symbol, min_upnl_profit_pct, max_upnl_profit_pct):
@@ -739,7 +739,7 @@ class BybitStrategy(BaseStrategy):
             return None, None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
-        logging.info(f"Price precision for {symbol}: {price_precision}")
+        logging.info(f"Price precision for [{symbol}]: {price_precision}")
 
         # Calculate the minimum and maximum target profit prices
         min_target_profit_price = Decimal(long_pos_price) * (1 + Decimal(min_upnl_profit_pct))
@@ -765,7 +765,7 @@ class BybitStrategy(BaseStrategy):
             return None, None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
-        logging.info(f"Price precision for {symbol}: {price_precision}")
+        logging.info(f"Price precision for [{symbol}]: {price_precision}")
 
         # Calculate the minimum and maximum target profit prices
         min_target_profit_price = Decimal(short_pos_price) * (1 - Decimal(min_upnl_profit_pct))
@@ -791,7 +791,7 @@ class BybitStrategy(BaseStrategy):
             return None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
-        logging.info(f"Price precision for {symbol}: {price_precision}")
+        logging.info(f"Price precision for [{symbol}]: {price_precision}")
 
         # Calculate the target profit price
         target_profit_price = Decimal(long_pos_price) * (1 + Decimal(upnl_profit_pct))
@@ -813,7 +813,7 @@ class BybitStrategy(BaseStrategy):
             return None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
-        logging.info(f"Price precision for {symbol}: {price_precision}")
+        logging.info(f"Price precision for [{symbol}]: {price_precision}")
 
         # Calculate the target profit price
         target_profit_price = Decimal(short_pos_price) * (1 - Decimal(upnl_profit_pct))
@@ -837,14 +837,14 @@ class BybitStrategy(BaseStrategy):
             return None
 
         _, price_precision = self.exchange.get_symbol_precision_bybit(symbol)
-        logging.info(f"Price precision for {symbol}: {price_precision}")
+        logging.info(f"Price precision for [{symbol}]: {price_precision}")
 
         original_tp = long_pos_price * (1 + upnl_profit_pct)
-        logging.info(f"Original long TP for {symbol}: {original_tp}")
+        logging.info(f"Original long TP for [{symbol}]: {original_tp}")
 
         bid_walls, ask_walls = self.detect_significant_order_book_walls_atr(symbol)
         if not ask_walls:
-            logging.info(f"No significant ask walls found for {symbol}")
+            logging.info(f"No significant ask walls found for [{symbol}]")
 
         adjusted_tp = original_tp
         for price, size in ask_walls:
@@ -852,21 +852,21 @@ class BybitStrategy(BaseStrategy):
                 extended_tp = price - float(price_precision)
                 if extended_tp > 0:
                     adjusted_tp = max(adjusted_tp, extended_tp)
-                    logging.info(f"Adjusted long TP for {symbol} based on ask wall: {adjusted_tp}")
+                    logging.info(f"Adjusted long TP for [{symbol}] based on ask wall: {adjusted_tp}")
                 break
 
         # Check if the adjusted TP is within the allowed deviation from the original TP
         if adjusted_tp > original_tp * (1 + max_deviation_pct):
-            logging.info(f"Adjusted long TP for {symbol} exceeds the allowed deviation. Reverting to original TP: {original_tp}")
+            logging.info(f"Adjusted long TP for [{symbol}] exceeds the allowed deviation. Reverting to original TP: {original_tp}")
             adjusted_tp = original_tp
 
         # Adjust TP to best bid price if surpassed
         if best_bid_price >= adjusted_tp:
             adjusted_tp = best_bid_price
-            logging.info(f"TP surpassed, adjusted to best bid price for {symbol}: {adjusted_tp}")
+            logging.info(f"TP surpassed, adjusted to best bid price for [{symbol}]: {adjusted_tp}")
 
         rounded_tp = round(adjusted_tp, len(str(price_precision).split('.')[-1]))
-        logging.info(f"Final rounded long TP for {symbol}: {rounded_tp}")
+        logging.info(f"Final rounded long TP for [{symbol}]: {rounded_tp}")
         return rounded_tp
 
     def calculate_dynamic_short_take_profit(self, best_ask_price, short_pos_price, symbol, upnl_profit_pct, max_deviation_pct=0.05):
@@ -875,14 +875,14 @@ class BybitStrategy(BaseStrategy):
             return None
 
         _, price_precision = self.exchange.get_symbol_precision_bybit(symbol)
-        logging.info(f"Price precision for {symbol}: {price_precision}")
+        logging.info(f"Price precision for [{symbol}]: {price_precision}")
 
         original_tp = short_pos_price * (1 - upnl_profit_pct)
-        logging.info(f"Original short TP for {symbol}: {original_tp}")
+        logging.info(f"Original short TP for [{symbol}]: {original_tp}")
 
         bid_walls, ask_walls = self.detect_significant_order_book_walls_atr(symbol)
         if not bid_walls:
-            logging.info(f"No significant bid walls found for {symbol}")
+            logging.info(f"No significant bid walls found for [{symbol}]")
 
         adjusted_tp = original_tp
         for price, size in bid_walls:
@@ -890,21 +890,21 @@ class BybitStrategy(BaseStrategy):
                 extended_tp = price + float(price_precision)
                 if extended_tp > 0:
                     adjusted_tp = min(adjusted_tp, extended_tp)
-                    logging.info(f"Adjusted short TP for {symbol} based on bid wall: {adjusted_tp}")
+                    logging.info(f"Adjusted short TP for [{symbol}] based on bid wall: {adjusted_tp}")
                 break
 
         # Check if the adjusted TP is within the allowed deviation from the original TP
         if adjusted_tp < original_tp * (1 - max_deviation_pct):
-            logging.info(f"Adjusted short TP for {symbol} exceeds the allowed deviation. Reverting to original TP: {original_tp}")
+            logging.info(f"Adjusted short TP for [{symbol}] exceeds the allowed deviation. Reverting to original TP: {original_tp}")
             adjusted_tp = original_tp
 
         # Adjust TP to best ask price if surpassed
         if best_ask_price <= adjusted_tp:
             adjusted_tp = best_ask_price
-            logging.info(f"TP surpassed, adjusted to best ask price for {symbol}: {adjusted_tp}")
+            logging.info(f"TP surpassed, adjusted to best ask price for [{symbol}]: {adjusted_tp}")
 
         rounded_tp = round(adjusted_tp, len(str(price_precision).split('.')[-1]))
-        logging.info(f"Final rounded short TP for {symbol}: {rounded_tp}")
+        logging.info(f"Final rounded short TP for [{symbol}]: {rounded_tp}")
         return rounded_tp
     def detect_order_book_walls(self, symbol, threshold=5.0):
         order_book = self.exchange.get_orderbook(symbol)
@@ -918,9 +918,9 @@ class BybitStrategy(BaseStrategy):
         ask_walls = [(price, size) for price, size in asks if size > avg_ask_size * threshold]
 
         if bid_walls:
-            logging.info(f"Detected buy walls at {bid_walls} for {symbol}")
+            logging.info(f"Detected buy walls at {bid_walls} for [{symbol}]")
         if ask_walls:
-            logging.info(f"Detected sell walls at {ask_walls} for {symbol}")
+            logging.info(f"Detected sell walls at {ask_walls} for [{symbol}]")
 
         return bid_walls, ask_walls
         
@@ -959,8 +959,8 @@ class BybitStrategy(BaseStrategy):
         significant_bid_walls = [(price, size) for price, size in bids if is_wall_significant(price, size, dynamic_threshold, avg_bid_size)]
         significant_ask_walls = [(price, size) for price, size in asks if is_wall_significant(price, size, dynamic_threshold, avg_ask_size)]
 
-        logging.info(f"Significant bid walls: {significant_bid_walls} for {symbol}")
-        logging.info(f"Significant ask walls: {significant_ask_walls} for {symbol}")
+        logging.info(f"Significant bid walls: {significant_bid_walls} for [{symbol}]")
+        logging.info(f"Significant ask walls: {significant_ask_walls} for [{symbol}]")
 
         return significant_bid_walls, significant_ask_walls
 
@@ -1006,11 +1006,11 @@ class BybitStrategy(BaseStrategy):
         with self.initialized_symbols_lock:
             if symbol not in self.initialized_symbols:
                 self.initialize_trade_quantities(symbol, total_equity, best_ask_price, max_leverage)
-                logging.info(f"Initialized quantities for {symbol}. Initial long qty: {self.initial_max_long_trade_qty_per_symbol.get(symbol, 'N/A')}, Initial short qty: {self.initial_max_short_trade_qty_per_symbol.get(symbol, 'N/A')}")
+                logging.info(f"Initialized quantities for [{symbol}]. Initial long qty: {self.initial_max_long_trade_qty_per_symbol.get(symbol, 'N/A')}, Initial short qty: {self.initial_max_short_trade_qty_per_symbol.get(symbol, 'N/A')}")
                 self.initialized_symbols.add(symbol)
                 return True
             else:
-                logging.info(f"{symbol} is already initialized.")
+                logging.info(f"[{symbol}] is already initialized.")
                 return False
 
     def adjust_risk_parameters_qstrend(self, exchange_max_leverage):
@@ -1065,17 +1065,17 @@ class BybitStrategy(BaseStrategy):
             max_trade_qty = self.calculate_max_trade_qty(symbol, total_equity, best_ask_price)
             self.max_trade_qty_per_symbol[symbol] = max_trade_qty
             self.initialized_symbols.add(symbol)
-            logging.info(f"Symbol {symbol} initialization: Max Trade Qty: {max_trade_qty}, Total Equity: {total_equity}, Best Ask Price: {best_ask_price}")
+            logging.info(f"Symbol [{symbol}] initialization: Max Trade Qty: {max_trade_qty}, Total Equity: {total_equity}, Best Ask Price: {best_ask_price}")
 
         dynamic_amount = self.calculate_dynamic_amount(symbol, total_equity, best_ask_price)
         self.dynamic_amount_per_symbol[symbol] = dynamic_amount
-        logging.info(f"Dynamic Amount Updated: Symbol: {symbol}, Dynamic Amount: {dynamic_amount}")
+        logging.info(f"Dynamic Amount Updated: Symbol: [{symbol}], Dynamic Amount: {dynamic_amount}")
 
     # Calculate maximum trade quantity for a symbol
     def calculate_max_trade_qty(self, symbol, total_equity, best_ask_price, max_leverage):
         leveraged_equity = total_equity * max_leverage
         max_trade_qty = (self.dynamic_amount_multiplier * leveraged_equity) / best_ask_price
-        logging.info(f"Calculating Max Trade Qty: Symbol: {symbol}, Leveraged Equity: {leveraged_equity}, Max Trade Qty: {max_trade_qty}")
+        logging.info(f"Calculating Max Trade Qty: Symbol: [{symbol}], Leveraged Equity: {leveraged_equity}, Max Trade Qty: {max_trade_qty}")
         return max_trade_qty
 
     
@@ -1083,10 +1083,10 @@ class BybitStrategy(BaseStrategy):
         market_data = self.exchange.get_market_data_bybit(symbol)
         min_qty_bybit = market_data["min_qty"]
         if float(amount) < min_qty_bybit:
-            logging.info(f"The amount you entered ({amount}) is less than the minimum required by Bybit for {symbol}: {min_qty_bybit}.")
+            logging.info(f"The amount you entered ({amount}) is less than the minimum required by Bybit for [{symbol}]: {min_qty_bybit}.")
             return False
         else:
-            logging.info(f"The amount you entered ({amount}) is valid for {symbol}")
+            logging.info(f"The amount you entered ({amount}) is valid for [{symbol}]")
             return True
 
     def check_amount_validity_once_bybit(self, amount, symbol):
@@ -1094,10 +1094,10 @@ class BybitStrategy(BaseStrategy):
             market_data = self.exchange.get_market_data_bybit(symbol)
             min_qty_bybit = market_data["min_qty"]
             if float(amount) < min_qty_bybit:
-                logging.info(f"The amount you entered ({amount}) is less than the minimum required by Bybit for {symbol}: {min_qty_bybit}.")
+                logging.info(f"The amount you entered ({amount}) is less than the minimum required by Bybit for [{symbol}]: {min_qty_bybit}.")
                 return False
             else:
-                logging.info(f"The amount you entered ({amount}) is valid for {symbol}")
+                logging.info(f"The amount you entered ({amount}) is valid for [{symbol}]")
                 return True
 
     def can_proceed_with_trade_funding(self, symbol: str) -> dict:
@@ -1138,22 +1138,22 @@ class BybitStrategy(BaseStrategy):
     def can_place_order(self, symbol, interval=60):
         with self.lock:
             current_time = time.time()
-            logging.info(f"Attempting to check if an order can be placed for {symbol} at {current_time}")
+            logging.info(f"Attempting to check if an order can be placed for [{symbol}] at {current_time}")
             
             if symbol in self.last_order_time:
                 time_difference = current_time - self.last_order_time[symbol]
-                logging.info(f"Time since last order for {symbol}: {time_difference} seconds")
+                logging.info(f"Time since last order for [{symbol}]: {time_difference} seconds")
                 
                 if time_difference <= interval:
-                    logging.warning(f"Rate limit exceeded for {symbol}. Denying order placement.")
+                    logging.warning(f"Rate limit exceeded for [{symbol}]. Denying order placement.")
                     return False
                 
             self.last_order_time[symbol] = current_time
-            logging.info(f"Order allowed for {symbol} at {current_time}")
+            logging.info(f"Order allowed for [{symbol}] at {current_time}")
             return True
 
     def bybit_hedge_placetp_maker(self, symbol, pos_qty, take_profit_price, positionIdx, order_side, open_orders):
-        logging.info(f"TP maker function Trying to place TP for {symbol}")
+        logging.info(f"TP maker function Trying to place TP for [{symbol}]")
         existing_tps = self.get_open_take_profit_order_quantities(open_orders, order_side)
         logging.info(f"Existing TP from TP maker functions: {existing_tps}")
         total_existing_tp_qty = sum(qty for qty, _ in existing_tps)
@@ -1176,7 +1176,7 @@ class BybitStrategy(BaseStrategy):
                 if tp_order and 'id' in tp_order:
                     logging.info(f"{order_side.capitalize()} take profit set at {take_profit_price} with ID {tp_order['id']}")
                 else:
-                    logging.warning(f"Failed to place {order_side} take profit for {symbol}")
+                    logging.warning(f"Failed to place {order_side} take profit for [{symbol}]")
                 time.sleep(0.05)
             except Exception as e:
                 logging.info(f"Error in placing {order_side} TP: {e}")
@@ -1188,12 +1188,12 @@ class BybitStrategy(BaseStrategy):
 
         # Log and store the order ID if the order was placed successfully
         if order and 'id' in order:
-            logging.info(f"Successfully placed post-only limit order for {symbol}. Order ID: {order['id']}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
+            logging.info(f"Successfully placed post-only limit order for [{symbol}]. Order ID: {order['id']}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
             if symbol not in self.order_ids:
                 self.order_ids[symbol] = []
             self.order_ids[symbol].append(order['id'])
         else:
-            logging.warning(f"Failed to place post-only limit order for {symbol}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
+            logging.warning(f"Failed to place post-only limit order for [{symbol}]. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
 
         return order
       
@@ -1202,17 +1202,17 @@ class BybitStrategy(BaseStrategy):
         order = self.place_postonly_order_bybit(symbol, side, amount, price, positionIdx, reduceOnly)
         if order and 'id' in order:
             self.update_hedged_status(symbol, True)
-            logging.info(f"Hedge order placed for {symbol}: {order['id']}")
+            logging.info(f"Hedge order placed for [{symbol}]: {order['id']}")
         else:
-            logging.warning(f"Failed to place hedge order for {symbol}")
+            logging.warning(f"Failed to place hedge order for [{symbol}]")
         return order
 
     def place_postonly_order_bybit(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         current_thread_id = threading.get_ident()  # Get the current thread ID
-        logging.info(f"[Thread ID: {current_thread_id}] Attempting to place post-only order for {symbol}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
+        logging.info(f"[Thread ID: {current_thread_id}] Attempting to place post-only order for [{symbol}]. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
 
         if not self.can_place_order(symbol):
-            logging.warning(f"[Thread ID: {current_thread_id}] Order placement rate limit exceeded for {symbol}. Skipping...")
+            logging.warning(f"[Thread ID: {current_thread_id}] Order placement rate limit exceeded for [{symbol}]. Skipping...")
             return None
 
         return self.postonly_limit_order_bybit(symbol, side, amount, price, positionIdx, reduceOnly)
@@ -1226,9 +1226,9 @@ class BybitStrategy(BaseStrategy):
             if symbol not in self.entry_order_ids:
                 self.entry_order_ids[symbol] = []
             self.entry_order_ids[symbol].append(order['id'])
-            logging.info(f"Stored order ID {order['id']} for symbol {symbol}. Current order IDs for {symbol}: {self.entry_order_ids[symbol]}")
+            logging.info(f"Stored order ID {order['id']} for symbol [{symbol}]. Current order IDs for [{symbol}]: {self.entry_order_ids[symbol]}")
         else:
-            logging.warning(f"Failed to store order ID for symbol {symbol} due to missing 'id' or unsuccessful order placement.")
+            logging.warning(f"Failed to store order ID for symbol [{symbol}] due to missing 'id' or unsuccessful order placement.")
 
         return order
 
@@ -1245,7 +1245,7 @@ class BybitStrategy(BaseStrategy):
         - positionIdx: Position index for Bybit (1 for long, 2 for short).
         - reduce_only: Flag to make the order reduce-only, default is True.
         """
-        logging.info(f"Calling create_normal_stop_loss_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
+        logging.info(f"Calling create_normal_stop_loss_order_bybit with symbol=[{symbol}], order_type={order_type}, side={side}, amount={amount}, price={price}")
 
         if positionIdx is None:
             raise ValueError("positionIdx must be specified (1 for long, 2 for short)")
@@ -1269,23 +1269,23 @@ class BybitStrategy(BaseStrategy):
 
         # Log and store the order ID if the order was placed successfully
         if order and 'id' in order:
-            logging.info(f"Successfully placed post-only limit order for {symbol}. Order ID: {order['id']}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
+            logging.info(f"Successfully placed post-only limit order for [{symbol}]. Order ID: {order['id']}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
             if symbol not in self.order_ids:
                 self.order_ids[symbol] = []
             self.order_ids[symbol].append(order['id'])
         else:
-            logging.warning(f"Failed to place post-only limit order for {symbol}. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
+            logging.warning(f"Failed to place post-only limit order for [{symbol}]. Side: {side}, Amount: {amount}, Price: {price}, PositionIdx: {positionIdx}, ReduceOnly: {reduceOnly}")
 
         return order
 
     def limit_order_bybit_reduce_nolimit(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly}
-        logging.info(f"Placing {side} limit order for {symbol} at {price} with qty {amount} and params {params}...")
+        logging.info(f"Placing {side} limit order for [{symbol}] at {price} with qty {amount} and params {params}...")
         try:
             order = self.exchange.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
             logging.info(f"Order result: {order}")
             if order is None:
-                logging.warning(f"Order result is None for {side} limit order on {symbol}")
+                logging.warning(f"Order result is None for {side} limit order on [{symbol}]")
             return order
         except Exception as e:
             logging.info(f"Error placing order: {str(e)}")
@@ -1294,12 +1294,12 @@ class BybitStrategy(BaseStrategy):
             
     def postonly_limit_order_bybit_nolimit(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly, "postOnly": True}
-        logging.info(f"Placing {side} limit order for {symbol} at {price} with qty {amount} and params {params}...")
+        logging.info(f"Placing {side} limit order for [{symbol}] at {price} with qty {amount} and params {params}...")
         try:
             order = self.exchange.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
-            logging.info(f"Nolimit postonly order result for {symbol}: {order}")
+            logging.info(f"Nolimit postonly order result for [{symbol}]: {order}")
             if order is None:
-                logging.warning(f"Order result is None for {side} limit order on {symbol}")
+                logging.warning(f"Order result is None for {side} limit order on [{symbol}]")
             return order
         except Exception as e:
             logging.info(f"Error placing order: {str(e)}")
@@ -1307,12 +1307,12 @@ class BybitStrategy(BaseStrategy):
 
     def limit_order_bybit_nolimit(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly, "postOnly": False}
-        logging.info(f"Placing {side} limit order for {symbol} at {price} with qty {amount} and params {params}...")
+        logging.info(f"Placing {side} limit order for [{symbol}] at {price} with qty {amount} and params {params}...")
         try:
             order = self.exchange.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
-            logging.info(f"Nolimit postonly order result for {symbol}: {order}")
+            logging.info(f"Nolimit postonly order result for [{symbol}]: {order}")
             if order is None:
-                logging.warning(f"Order result is None for {side} limit order on {symbol}")
+                logging.warning(f"Order result is None for {side} limit order on [{symbol}]")
             return order
         except Exception as e:
             logging.info(f"Error placing order: {str(e)}")
@@ -1320,12 +1320,12 @@ class BybitStrategy(BaseStrategy):
 
     def postonly_limit_order_bybit_s(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly, "postOnly": True}
-        logging.info(f"Placing {side} limit order for {symbol} at {price} with qty {amount} and params {params}...")
+        logging.info(f"Placing {side} limit order for [{symbol}] at {price} with qty {amount} and params {params}...")
         try:
             order = self.exchange.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
             logging.info(f"Order result: {order}")
             if order is None:
-                logging.warning(f"Order result is None for {side} limit order on {symbol}")
+                logging.warning(f"Order result is None for {side} limit order on [{symbol}]")
             return order
         except Exception as e:
             logging.info(f"Error placing order: {str(e)}")
@@ -1333,20 +1333,20 @@ class BybitStrategy(BaseStrategy):
 
     def limit_order_bybit(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly}
-        #print(f"Symbol: {symbol}, Side: {side}, Amount: {amount}, Price: {price}, Params: {params}")
+        #print(f"Symbol: [{symbol}], Side: {side}, Amount: {amount}, Price: {price}, Params: {params}")
         order = self.exchange.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
         return order
 
 
     def limit_order_bybit_unified(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly}
-        #print(f"Symbol: {symbol}, Side: {side}, Amount: {amount}, Price: {price}, Params: {params}")
+        #print(f"Symbol: [{symbol}], Side: {side}, Amount: {amount}, Price: {price}, Params: {params}")
         order = self.exchange.create_limit_order_bybit_unified(symbol, side, amount, price, positionIdx=positionIdx, params=params)
         return order
 
     def limit_order_bybit(self, symbol, side, amount, price, positionIdx, reduceOnly=False):
         params = {"reduceOnly": reduceOnly}
-        #print(f"Symbol: {symbol}, Side: {side}, Amount: {amount}, Price: {price}, Params: {params}")
+        #print(f"Symbol: [{symbol}], Side: {side}, Amount: {amount}, Price: {price}, Params: {params}")
         order = self.exchange.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
         return order
 
@@ -1394,7 +1394,7 @@ class BybitStrategy(BaseStrategy):
                                 symbol, pos_qty, take_profit_price, positionIdx, order_side,
                                 open_orders, next_tp_update
                             )
-                            logging.info(f"Updated take profit for {side} position on {symbol} to {take_profit_price}")
+                            logging.info(f"Updated take profit for {side} position on [{symbol}] to {take_profit_price}")
 
         except Exception as e:
             logging.info(f"Error in updating take profit: {e}")
@@ -1448,14 +1448,14 @@ class BybitStrategy(BaseStrategy):
                     self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
                     logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price}")
                 except Exception as e:
-                    logging.info(f"Failed to set new {order_side} TP for {symbol}. Error: {e}")
+                    logging.info(f"Failed to set new {order_side} TP for [{symbol}]. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for {symbol}")
+                logging.info(f"Skipping TP update as a TP order already exists for [{symbol}]")
 
             # Calculate and return the next update time
             return self.calculate_next_update_time()
         else:
-            logging.info(f"No immediate update needed for TP orders for {symbol}. Last update at: {last_tp_update}")
+            logging.info(f"No immediate update needed for TP orders for [{symbol}]. Last update at: {last_tp_update}")
             return last_tp_update
 
 
@@ -1463,31 +1463,31 @@ class BybitStrategy(BaseStrategy):
         try:
             if long_pos_qty > 0:  # Check if long position quantity is greater than 0
                 tp_order_counts = self.exchange.get_open_tp_order_count(symbol)
-                logging.info(f"Long TP order counts for {symbol}: {tp_order_counts}")
+                logging.info(f"Long TP order counts for [{symbol}]: {tp_order_counts}")
                 if tp_order_counts['long_tp_count'] == 0:
                     if long_pos_price is not None and best_ask_price is not None and long_pos_price >= long_take_profit:
                         long_take_profit = best_ask_price
-                        logging.info(f"Adjusted long TP to current bid price for {symbol}: {long_take_profit}")
+                        logging.info(f"Adjusted long TP to current bid price for [{symbol}]: {long_take_profit}")
                     if long_take_profit is not None:
-                        logging.info(f"Placing long TP order for {symbol} at {long_take_profit} with {long_pos_qty}")
+                        logging.info(f"Placing long TP order for [{symbol}] at {long_take_profit} with {long_pos_qty}")
                         self.bybit_hedge_placetp_maker(symbol, long_pos_qty, long_take_profit, positionIdx=1, order_side="sell", open_orders=open_orders)
         except Exception as e:
-            logging.info(f"Exception caught in placing long TP order for {symbol}: {e}")
+            logging.info(f"Exception caught in placing long TP order for [{symbol}]: {e}")
 
     def place_short_tp_order(self, symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders):
         try:
             if short_pos_qty > 0:  # Check if short position quantity is greater than 0
                 tp_order_counts = self.exchange.get_open_tp_order_count(symbol)
-                logging.info(f"Short TP order counts for {symbol}: {tp_order_counts}")
+                logging.info(f"Short TP order counts for [{symbol}]: {tp_order_counts}")
                 if tp_order_counts['short_tp_count'] == 0:
                     if short_pos_price is not None and best_bid_price is not None and short_pos_price <= short_take_profit:
                         short_take_profit = best_bid_price
-                        logging.info(f"Adjusted short TP to current ask price for {symbol}: {short_take_profit}")
+                        logging.info(f"Adjusted short TP to current ask price for [{symbol}]: {short_take_profit}")
                     if short_take_profit is not None:
-                        logging.info(f"Placing short TP order for {symbol} at {short_take_profit} with {short_pos_qty}")
+                        logging.info(f"Placing short TP order for [{symbol}] at {short_take_profit} with {short_pos_qty}")
                         self.bybit_hedge_placetp_maker(symbol, short_pos_qty, short_take_profit, positionIdx=2, order_side="buy", open_orders=open_orders)
         except Exception as e:
-            logging.info(f"Exception caught in placing short TP order for {symbol}: {e}")
+            logging.info(f"Exception caught in placing short TP order for [{symbol}]: {e}")
             
     def entry_order_exists(self, open_orders, side):
         for order in open_orders:
@@ -1506,7 +1506,7 @@ class BybitStrategy(BaseStrategy):
         market_data = self.get_market_data_with_retry(symbol, max_retries=max_retries, retry_delay=5)
 
         # Log the market data for debugging
-        logging.info(f"Market data for {symbol}: {market_data}")
+        logging.info(f"Market data for [{symbol}]: {market_data}")
 
         try:
             min_qty = float(market_data.get('min_qty', 1.0))  # Use min_qty directly
@@ -1547,8 +1547,8 @@ class BybitStrategy(BaseStrategy):
             long_entry_size = max(min_qty, round(long_entry_size))
             short_entry_size = max(min_qty, round(short_entry_size))
 
-            logging.info(f"Calculated long entry size for {symbol}: {long_entry_size} units")
-            logging.info(f"Calculated short entry size for {symbol}: {short_entry_size} units")
+            logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size} units")
+            logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size} units")
 
             return long_entry_size, short_entry_size
         except (TypeError, ValueError) as e:
@@ -1559,7 +1559,7 @@ class BybitStrategy(BaseStrategy):
         market_data = self.get_market_data_with_retry(symbol, max_retries=max_retries, retry_delay=5)
 
         # Log the market data for debugging
-        logging.info(f"Market data for {symbol}: {market_data}")
+        logging.info(f"Market data for [{symbol}]: {market_data}")
 
         try:
             min_qty = float(market_data.get('min_qty', 1.0))  # Use min_qty directly
@@ -1603,8 +1603,8 @@ class BybitStrategy(BaseStrategy):
             long_entry_size = max(min_qty, round(long_entry_size))
             short_entry_size = max(min_qty, round(short_entry_size))
 
-            logging.info(f"Calculated long entry size for {symbol}: {long_entry_size} units")
-            logging.info(f"Calculated short entry size for {symbol}: {short_entry_size} units")
+            logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size} units")
+            logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size} units")
 
             return long_entry_size, short_entry_size
         except (TypeError, ValueError) as e:
@@ -1632,14 +1632,14 @@ class BybitStrategy(BaseStrategy):
         max_equity_for_long_trade = total_equity * self.wallet_exposure_limit
         max_long_position_value = max_equity_for_long_trade * self.user_defined_leverage_long
 
-        logging.info(f"Max long pos value for {symbol} : {max_long_position_value}")
+        logging.info(f"Max long pos value for [{symbol}] : {max_long_position_value}")
 
         long_entry_size = max(max_long_position_value / best_ask_price, min_qty_usd_value / best_ask_price)
 
         max_equity_for_short_trade = total_equity * self.wallet_exposure_limit
         max_short_position_value = max_equity_for_short_trade * self.user_defined_leverage_short
 
-        logging.info(f"Max short pos value for {symbol} : {max_short_position_value}")
+        logging.info(f"Max short pos value for [{symbol}] : {max_short_position_value}")
         
         short_entry_size = max(max_short_position_value / best_bid_price, min_qty_usd_value / best_bid_price)
 
@@ -1652,8 +1652,8 @@ class BybitStrategy(BaseStrategy):
             long_entry_size_adjusted = round(long_entry_size, -int(math.log10(qty_precision)))
             short_entry_size_adjusted = round(short_entry_size, -int(math.log10(qty_precision)))
 
-        logging.info(f"Calculated long entry size for {symbol}: {long_entry_size_adjusted} units")
-        logging.info(f"Calculated short entry size for {symbol}: {short_entry_size_adjusted} units")
+        logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
+        logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
 
         return long_entry_size_adjusted, short_entry_size_adjusted
 
@@ -1694,14 +1694,14 @@ class BybitStrategy(BaseStrategy):
         max_equity_for_long_trade = total_equity * self.wallet_exposure_limit
         max_long_position_value = max_equity_for_long_trade * self.user_defined_leverage_long
 
-        logging.info(f"Max long pos value for {symbol} : {max_long_position_value}")
+        logging.info(f"Max long pos value for [{symbol}] : {max_long_position_value}")
 
         long_entry_size = max(max_long_position_value / best_ask_price, min_qty_long)
 
         max_equity_for_short_trade = total_equity * self.wallet_exposure_limit
         max_short_position_value = max_equity_for_short_trade * self.user_defined_leverage_short
 
-        logging.info(f"Max short pos value for {symbol} : {max_short_position_value}")
+        logging.info(f"Max short pos value for [{symbol}] : {max_short_position_value}")
         
         short_entry_size = max(max_short_position_value / best_bid_price, min_qty_short)
 
@@ -1710,8 +1710,8 @@ class BybitStrategy(BaseStrategy):
         long_entry_size_adjusted = round(long_entry_size, -int(math.log10(qty_precision)))
         short_entry_size_adjusted = round(short_entry_size, -int(math.log10(qty_precision)))
 
-        logging.info(f"Calculated long entry size for {symbol}: {long_entry_size_adjusted} units")
-        logging.info(f"Calculated short entry size for {symbol}: {short_entry_size_adjusted} units")
+        logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
+        logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
 
         return long_entry_size_adjusted, short_entry_size_adjusted
 
@@ -1738,14 +1738,14 @@ class BybitStrategy(BaseStrategy):
         max_equity_for_long_trade = total_equity * self.wallet_exposure_limit
         max_long_position_value = max_equity_for_long_trade * self.user_defined_leverage_long
 
-        logging.info(f"Max long pos value for {symbol} : {max_long_position_value}")
+        logging.info(f"Max long pos value for [{symbol}] : {max_long_position_value}")
 
         long_entry_size = max(max_long_position_value / best_ask_price, min_notional_value / best_ask_price)
 
         max_equity_for_short_trade = total_equity * self.wallet_exposure_limit
         max_short_position_value = max_equity_for_short_trade * self.user_defined_leverage_short
 
-        logging.info(f"Max short pos value for {symbol} : {max_short_position_value}")
+        logging.info(f"Max short pos value for [{symbol}] : {max_short_position_value}")
         
         short_entry_size = max(max_short_position_value / best_bid_price, min_notional_value / best_bid_price)
 
@@ -1754,8 +1754,8 @@ class BybitStrategy(BaseStrategy):
         long_entry_size_adjusted = round(long_entry_size, -int(math.log10(qty_precision)))
         short_entry_size_adjusted = round(short_entry_size, -int(math.log10(qty_precision)))
 
-        logging.info(f"Calculated long entry size for {symbol}: {long_entry_size_adjusted} units")
-        logging.info(f"Calculated short entry size for {symbol}: {short_entry_size_adjusted} units")
+        logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
+        logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
 
         return long_entry_size_adjusted, short_entry_size_adjusted
 
@@ -1764,7 +1764,7 @@ class BybitStrategy(BaseStrategy):
 
         market_data = self.get_market_data_with_retry(symbol, max_retries=100, retry_delay=5)
         min_qty = float(market_data["min_qty"])
-        logging.info(f"Min qty for {symbol} : {min_qty}")
+        logging.info(f"Min qty for [{symbol}] : {min_qty}")
 
         # Starting with 0.1% of total equity for both long and short orders
         long_dynamic_amount = 0.001 * total_equity
@@ -1779,13 +1779,13 @@ class BybitStrategy(BaseStrategy):
         long_dynamic_amount += aggressive_steps * min_qty
         short_dynamic_amount += aggressive_steps * min_qty
 
-        logging.info(f"Long dynamic amount for {symbol} {long_dynamic_amount}")
-        logging.info(f"Short dynamic amount for {symbol} {short_dynamic_amount}")
+        logging.info(f"Long dynamic amount for [{symbol}] {long_dynamic_amount}")
+        logging.info(f"Short dynamic amount for [{symbol}] {short_dynamic_amount}")
 
         # Reduce the maximum allowed dynamic amount to be more conservative
         AGGRESSIVE_MAX_PCT_EQUITY = 0.05  # 5% of the total equity
         max_allowed_dynamic_amount = AGGRESSIVE_MAX_PCT_EQUITY * total_equity
-        logging.info(f"Max allowed dynamic amount for {symbol} : {max_allowed_dynamic_amount}")
+        logging.info(f"Max allowed dynamic amount for [{symbol}] : {max_allowed_dynamic_amount}")
 
         # Determine precision level directly
         precision_level = len(str(min_qty).split('.')[-1]) if '.' in str(min_qty) else 0
@@ -1813,7 +1813,7 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Dynamic amount too small for 0.001x, using min_qty for short_dynamic_amount")
             short_dynamic_amount = min_qty
 
-        logging.info(f"Symbol: {symbol} Final long_dynamic_amount: {long_dynamic_amount}, short_dynamic_amount: {short_dynamic_amount}")
+        logging.info(f"Symbol: [{symbol}] Final long_dynamic_amount: {long_dynamic_amount}, short_dynamic_amount: {short_dynamic_amount}")
 
         return long_dynamic_amount, short_dynamic_amount, min_qty
 
@@ -1824,7 +1824,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -1833,8 +1833,8 @@ class BybitStrategy(BaseStrategy):
                 mfi_signal_long = mfirsi.lower() == "long"
                 mfi_signal_short = mfirsi.lower() == "short"
 
-                logging.info(f"MFI signal for {symbol}: Long={mfi_signal_long}, Short={mfi_signal_short}")
-                logging.info(f"Volume check for {symbol}: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
+                logging.info(f"MFI signal for [{symbol}]: Long={mfi_signal_long}, Short={mfi_signal_short}")
+                logging.info(f"Volume check for [{symbol}]: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
 
                 # Calculate position balances
                 long_position_balance = long_pos_price * long_pos_qty if long_pos_price else 0
@@ -1845,13 +1845,13 @@ class BybitStrategy(BaseStrategy):
                 # Check if volume check is enabled or not
                 if not volume_check or (one_minute_volume > min_vol):
                     if not self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                         if long_pos_qty == 0 and mfi_signal_long and not self.entry_order_exists(open_orders, "buy"):
-                            logging.info(f"Placing initial long entry order for {symbol}")
+                            logging.info(f"Placing initial long entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                             time.sleep(1)
                             if long_pos_qty > 0:
-                                logging.info(f"Initial long entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial long entry order filled for [{symbol}], placing take-profit order")
                                 self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                 # Update TP for long position
                                 self.next_long_tp_update = self.update_quickscalp_tp(
@@ -1866,14 +1866,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial long entry order not filled for {symbol}")
+                                logging.info(f"Initial long entry order not filled for [{symbol}]")
                         elif long_pos_qty > 0 and mfi_signal_long and current_price < long_pos_price and not self.entry_order_exists(open_orders, "buy"):
                             if long_position_balance_pct < max_pos_balance_pct and (entry_during_autoreduce or not self.auto_reduce_active_long.get(symbol, False)):
-                                logging.info(f"Placing additional long entry order for {symbol}")
+                                logging.info(f"Placing additional long entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                                 time.sleep(1)
                                 if long_pos_qty > 0:
-                                    logging.info(f"Additional long entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional long entry order filled for [{symbol}], placing take-profit order")
                                     self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                     # Update TP for long position
                                     self.next_long_tp_update = self.update_quickscalp_tp(
@@ -1888,22 +1888,22 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional long entry order not filled for {symbol}")
+                                    logging.info(f"Additional long entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional long entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional long entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for long entry on {symbol}")
+                            logging.info(f"Conditions not met for long entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, skipping entry")
 
                     if not self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                         if short_pos_qty == 0 and mfi_signal_short and not self.entry_order_exists(open_orders, "sell"):
-                            logging.info(f"Placing initial short entry order for {symbol}")
+                            logging.info(f"Placing initial short entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                             time.sleep(1)
                             if short_pos_qty > 0:
-                                logging.info(f"Initial short entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial short entry order filled for [{symbol}], placing take-profit order")
                                 self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                 # Update TP for short position
                                 self.next_short_tp_update = self.update_quickscalp_tp(
@@ -1918,14 +1918,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial short entry order not filled for {symbol}")
+                                logging.info(f"Initial short entry order not filled for [{symbol}]")
                         elif short_pos_qty > 0 and mfi_signal_short and current_price > short_pos_price and not self.entry_order_exists(open_orders, "sell"):
                             if short_position_balance_pct < max_pos_balance_pct and (entry_during_autoreduce or not self.auto_reduce_active_short.get(symbol, False)):
-                                logging.info(f"Placing additional short entry order for {symbol}")
+                                logging.info(f"Placing additional short entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                                 time.sleep(1)
                                 if short_pos_qty > 0:
-                                    logging.info(f"Additional short entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional short entry order filled for [{symbol}], placing take-profit order")
                                     self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                     # Update TP for short position
                                     self.next_short_tp_update = self.update_quickscalp_tp(
@@ -1940,15 +1940,15 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional short entry order not filled for {symbol}")
+                                    logging.info(f"Additional short entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional short entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional short entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for short entry on {symbol}")
+                            logging.info(f"Conditions not met for short entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, skipping entry")
                 else:
-                    logging.info(f"Volume check failed for {symbol}, skipping entry")
+                    logging.info(f"Volume check failed for [{symbol}], skipping entry")
 
                 time.sleep(5)
         except Exception as e:
@@ -1962,7 +1962,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -1971,19 +1971,19 @@ class BybitStrategy(BaseStrategy):
                 mfi_signal_long = mfirsi.lower() == "long"
                 mfi_signal_short = mfirsi.lower() == "short"
 
-                logging.info(f"MFI signal for {symbol}: Long={mfi_signal_long}, Short={mfi_signal_short}")
-                logging.info(f"Volume check for {symbol}: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
+                logging.info(f"MFI signal for [{symbol}]: Long={mfi_signal_long}, Short={mfi_signal_short}")
+                logging.info(f"Volume check for [{symbol}]: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
 
                 # Check if volume check is enabled or not
                 if not volume_check or (one_minute_volume > min_vol):
                     if not self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                         if long_pos_qty == 0 and mfi_signal_long and not self.entry_order_exists(open_orders, "buy"):
-                            logging.info(f"Placing initial long entry order for {symbol}")
+                            logging.info(f"Placing initial long entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                             time.sleep(1)
                             if long_pos_qty > 0:
-                                logging.info(f"Initial long entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial long entry order filled for [{symbol}], placing take-profit order")
                                 self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                 # Update TP for long position
                                 self.next_long_tp_update = self.update_quickscalp_tp(
@@ -1998,14 +1998,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial long entry order not filled for {symbol}")
+                                logging.info(f"Initial long entry order not filled for [{symbol}]")
                         elif long_pos_qty > 0 and mfi_signal_long and current_price < long_pos_price and not self.entry_order_exists(open_orders, "buy"):
                             if entry_during_autoreduce or not self.auto_reduce_active_long.get(symbol, False):
-                                logging.info(f"Placing additional long entry order for {symbol}")
+                                logging.info(f"Placing additional long entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                                 time.sleep(1)
                                 if long_pos_qty > 0:
-                                    logging.info(f"Additional long entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional long entry order filled for [{symbol}], placing take-profit order")
                                     self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                     # Update TP for long position
                                     self.next_long_tp_update = self.update_quickscalp_tp(
@@ -2020,22 +2020,22 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional long entry order not filled for {symbol}")
+                                    logging.info(f"Additional long entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional long entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional long entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for long entry on {symbol}")
+                            logging.info(f"Conditions not met for long entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, skipping entry")
 
                     if not self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                         if short_pos_qty == 0 and mfi_signal_short and not self.entry_order_exists(open_orders, "sell"):
-                            logging.info(f"Placing initial short entry order for {symbol}")
+                            logging.info(f"Placing initial short entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                             time.sleep(1)
                             if short_pos_qty > 0:
-                                logging.info(f"Initial short entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial short entry order filled for [{symbol}], placing take-profit order")
                                 self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                 # Update TP for short position
                                 self.next_short_tp_update = self.update_quickscalp_tp(
@@ -2050,14 +2050,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial short entry order not filled for {symbol}")
+                                logging.info(f"Initial short entry order not filled for [{symbol}]")
                         elif short_pos_qty > 0 and mfi_signal_short and current_price > short_pos_price and not self.entry_order_exists(open_orders, "sell"):
                             if entry_during_autoreduce or not self.auto_reduce_active_short.get(symbol, False):
-                                logging.info(f"Placing additional short entry order for {symbol}")
+                                logging.info(f"Placing additional short entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                                 time.sleep(1)
                                 if short_pos_qty > 0:
-                                    logging.info(f"Additional short entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional short entry order filled for [{symbol}], placing take-profit order")
                                     self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                     # Update TP for short position
                                     self.next_short_tp_update = self.update_quickscalp_tp(
@@ -2072,15 +2072,15 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional short entry order not filled for {symbol}")
+                                    logging.info(f"Additional short entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional short entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional short entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for short entry on {symbol}")
+                            logging.info(f"Conditions not met for short entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, skipping entry")
                 else:
-                    logging.info(f"Volume check failed for {symbol}, skipping entry")
+                    logging.info(f"Volume check failed for [{symbol}], skipping entry")
 
                 time.sleep(5)
         except Exception as e:
@@ -2093,7 +2093,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -2102,20 +2102,20 @@ class BybitStrategy(BaseStrategy):
                 mfi_signal_long = mfirsi.lower() == "long"
                 mfi_signal_short = mfirsi.lower() == "short"
 
-                logging.info(f"MFI signal for {symbol}: Long={mfi_signal_long}, Short={mfi_signal_short}")
-                logging.info(f"EMA trend for {symbol}: {ema_trend}")
-                logging.info(f"Volume check for {symbol}: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
+                logging.info(f"MFI signal for [{symbol}]: Long={mfi_signal_long}, Short={mfi_signal_short}")
+                logging.info(f"EMA trend for [{symbol}]: {ema_trend}")
+                logging.info(f"Volume check for [{symbol}]: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
 
                 # Check if volume check is enabled or not
                 if not volume_check or (one_minute_volume > min_vol):
                     if not self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                         if long_pos_qty == 0 and mfi_signal_long and ema_trend == "long" and not self.entry_order_exists(open_orders, "buy"):
-                            logging.info(f"Placing initial long entry order for {symbol}")
+                            logging.info(f"Placing initial long entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                             time.sleep(1)
                             if long_pos_qty > 0:
-                                logging.info(f"Initial long entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial long entry order filled for [{symbol}], placing take-profit order")
                                 self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                 # Update TP for long position
                                 self.next_long_tp_update = self.update_quickscalp_tp(
@@ -2130,14 +2130,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial long entry order not filled for {symbol}")
+                                logging.info(f"Initial long entry order not filled for [{symbol}]")
                         elif long_pos_qty > 0 and mfi_signal_long and current_price < long_pos_price and not self.entry_order_exists(open_orders, "buy"):
                             if entry_during_autoreduce or not self.auto_reduce_active_long.get(symbol, False):
-                                logging.info(f"Placing additional long entry order for {symbol}")
+                                logging.info(f"Placing additional long entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                                 time.sleep(1)
                                 if long_pos_qty > 0:
-                                    logging.info(f"Additional long entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional long entry order filled for [{symbol}], placing take-profit order")
                                     self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                     # Update TP for long position
                                     self.next_long_tp_update = self.update_quickscalp_tp(
@@ -2152,22 +2152,22 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional long entry order not filled for {symbol}")
+                                    logging.info(f"Additional long entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional long entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional long entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for long entry on {symbol}")
+                            logging.info(f"Conditions not met for long entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, skipping entry")
 
                     if not self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                         if short_pos_qty == 0 and mfi_signal_short and ema_trend == "short" and not self.entry_order_exists(open_orders, "sell"):
-                            logging.info(f"Placing initial short entry order for {symbol}")
+                            logging.info(f"Placing initial short entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                             time.sleep(1)
                             if short_pos_qty > 0:
-                                logging.info(f"Initial short entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial short entry order filled for [{symbol}], placing take-profit order")
                                 self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                 # Update TP for short position
                                 self.next_short_tp_update = self.update_quickscalp_tp(
@@ -2182,14 +2182,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial short entry order not filled for {symbol}")
+                                logging.info(f"Initial short entry order not filled for [{symbol}]")
                         elif short_pos_qty > 0 and mfi_signal_short and current_price > short_pos_price and not self.entry_order_exists(open_orders, "sell"):
                             if entry_during_autoreduce or not self.auto_reduce_active_short.get(symbol, False):
-                                logging.info(f"Placing additional short entry order for {symbol}")
+                                logging.info(f"Placing additional short entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                                 time.sleep(1)
                                 if short_pos_qty > 0:
-                                    logging.info(f"Additional short entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional short entry order filled for [{symbol}], placing take-profit order")
                                     self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                     # Update TP for short position
                                     self.next_short_tp_update = self.update_quickscalp_tp(
@@ -2204,15 +2204,15 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional short entry order not filled for {symbol}")
+                                    logging.info(f"Additional short entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional short entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional short entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for short entry on {symbol}")
+                            logging.info(f"Conditions not met for short entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, skipping entry")
                 else:
-                    logging.info(f"Volume check failed for {symbol}, skipping entry")
+                    logging.info(f"Volume check failed for [{symbol}], skipping entry")
 
                 time.sleep(5)
         except Exception as e:
@@ -2225,7 +2225,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -2234,20 +2234,20 @@ class BybitStrategy(BaseStrategy):
                 mfi_signal_long = mfirsi.lower() == "long"
                 mfi_signal_short = mfirsi.lower() == "short"
 
-                logging.info(f"MFI signal for {symbol}: Long={mfi_signal_long}, Short={mfi_signal_short}")
-                logging.info(f"ERI trend for {symbol}: {eri_trend}")
-                logging.info(f"Volume check for {symbol}: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
+                logging.info(f"MFI signal for [{symbol}]: Long={mfi_signal_long}, Short={mfi_signal_short}")
+                logging.info(f"ERI trend for [{symbol}]: {eri_trend}")
+                logging.info(f"Volume check for [{symbol}]: Enabled={volume_check}, One-minute volume={one_minute_volume}, Min volume={min_vol}")
 
                 # Check if volume check is enabled or not
                 if not volume_check or (one_minute_volume > min_vol):
                     if not self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                         if long_pos_qty == 0 and mfi_signal_long and eri_trend == "bullish" and not self.entry_order_exists(open_orders, "buy"):
-                            logging.info(f"Placing initial long entry order for {symbol}")
+                            logging.info(f"Placing initial long entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                             time.sleep(1)
                             if long_pos_qty > 0:
-                                logging.info(f"Initial long entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial long entry order filled for [{symbol}], placing take-profit order")
                                 self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                 # Update TP for long position
                                 self.next_long_tp_update = self.update_quickscalp_tp(
@@ -2262,14 +2262,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial long entry order not filled for {symbol}")
+                                logging.info(f"Initial long entry order not filled for [{symbol}]")
                         elif long_pos_qty > 0 and mfi_signal_long and current_price < long_pos_price and not self.entry_order_exists(open_orders, "buy"):
                             if entry_during_autoreduce or not self.auto_reduce_active_long.get(symbol, False):
-                                logging.info(f"Placing additional long entry order for {symbol}")
+                                logging.info(f"Placing additional long entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "buy", long_dynamic_amount, best_bid_price, positionIdx=1, reduceOnly=False)
                                 time.sleep(1)
                                 if long_pos_qty > 0:
-                                    logging.info(f"Additional long entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional long entry order filled for [{symbol}], placing take-profit order")
                                     self.place_long_tp_order(symbol, best_ask_price, long_pos_price, long_pos_qty, long_take_profit, open_orders)
                                     # Update TP for long position
                                     self.next_long_tp_update = self.update_quickscalp_tp(
@@ -2284,22 +2284,22 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional long entry order not filled for {symbol}")
+                                    logging.info(f"Additional long entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional long entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional long entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for long entry on {symbol}")
+                            logging.info(f"Conditions not met for long entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, skipping entry")
 
                     if not self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                         if short_pos_qty == 0 and mfi_signal_short and eri_trend == "bearish" and not self.entry_order_exists(open_orders, "sell"):
-                            logging.info(f"Placing initial short entry order for {symbol}")
+                            logging.info(f"Placing initial short entry order for [{symbol}]")
                             self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                             time.sleep(1)
                             if short_pos_qty > 0:
-                                logging.info(f"Initial short entry order filled for {symbol}, placing take-profit order")
+                                logging.info(f"Initial short entry order filled for [{symbol}], placing take-profit order")
                                 self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                 # Update TP for short position
                                 self.next_short_tp_update = self.update_quickscalp_tp(
@@ -2314,14 +2314,14 @@ class BybitStrategy(BaseStrategy):
                                     tp_order_counts=tp_order_counts
                                 )
                             else:
-                                logging.info(f"Initial short entry order not filled for {symbol}")
+                                logging.info(f"Initial short entry order not filled for [{symbol}]")
                         elif short_pos_qty > 0 and mfi_signal_short and current_price > short_pos_price and not self.entry_order_exists(open_orders, "sell"):
                             if entry_during_autoreduce or not self.auto_reduce_active_short.get(symbol, False):
-                                logging.info(f"Placing additional short entry order for {symbol}")
+                                logging.info(f"Placing additional short entry order for [{symbol}]")
                                 self.place_postonly_order_bybit(symbol, "sell", short_dynamic_amount, best_ask_price, positionIdx=2, reduceOnly=False)
                                 time.sleep(1)
                                 if short_pos_qty > 0:
-                                    logging.info(f"Additional short entry order filled for {symbol}, placing take-profit order")
+                                    logging.info(f"Additional short entry order filled for [{symbol}], placing take-profit order")
                                     self.place_short_tp_order(symbol, best_bid_price, short_pos_price, short_pos_qty, short_take_profit, open_orders)
                                     # Update TP for short position
                                     self.next_short_tp_update = self.update_quickscalp_tp(
@@ -2336,15 +2336,15 @@ class BybitStrategy(BaseStrategy):
                                         tp_order_counts=tp_order_counts
                                     )
                                 else:
-                                    logging.info(f"Additional short entry order not filled for {symbol}")
+                                    logging.info(f"Additional short entry order not filled for [{symbol}]")
                             else:
-                                logging.info(f"Skipping additional short entry for {symbol} due to active auto-reduce.")
+                                logging.info(f"Skipping additional short entry for [{symbol}] due to active auto-reduce.")
                         else:
-                            logging.info(f"Conditions not met for short entry on {symbol}")
+                            logging.info(f"Conditions not met for short entry on [{symbol}]")
                     else:
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, skipping entry")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, skipping entry")
                 else:
-                    logging.info(f"Volume check failed for {symbol}, skipping entry")
+                    logging.info(f"Volume check failed for [{symbol}], skipping entry")
 
                 time.sleep(5)
         except Exception as e:
@@ -2357,7 +2357,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -2399,7 +2399,7 @@ class BybitStrategy(BaseStrategy):
                                 tp_order_counts=tp_order_counts
                             )
                 else:
-                    logging.info(f"Volume check is disabled or conditions not met for {symbol}, proceeding without volume check.")
+                    logging.info(f"Volume check is disabled or conditions not met for [{symbol}], proceeding without volume check.")
 
                 time.sleep(5)
         except Exception as e:
@@ -2412,7 +2412,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -2454,7 +2454,7 @@ class BybitStrategy(BaseStrategy):
                                 tp_order_counts=tp_order_counts
                             )
                 else:
-                    logging.info(f"Volume check is disabled or conditions not met for {symbol}, proceeding without volume check.")
+                    logging.info(f"Volume check is disabled or conditions not met for [{symbol}], proceeding without volume check.")
 
                 time.sleep(5)
         except Exception as e:
@@ -2568,7 +2568,7 @@ class BybitStrategy(BaseStrategy):
 
             with self.symbol_locks[symbol]:
                 current_price = self.exchange.get_current_price(symbol)
-                logging.info(f"Current price for {symbol}: {current_price}")
+                logging.info(f"Current price for [{symbol}]: {current_price}")
 
                 order_book = self.exchange.get_orderbook(symbol)
                 best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
@@ -2578,22 +2578,22 @@ class BybitStrategy(BaseStrategy):
 
                 if not volume_check or (one_minute_volume > min_vol):
                     if spot_position_qty == 0 and mfi_signal_long and not self.entry_order_exists(open_orders, "buy"):
-                        logging.info(f"Placing spot market buy order for {symbol} with amount {long_dynamic_amount}")
+                        logging.info(f"Placing spot market buy order for [{symbol}] with amount {long_dynamic_amount}")
                         self.place_spot_market_order(symbol, "buy", long_dynamic_amount)
                         time.sleep(1)
 
                     if spot_position_qty > 0:
                         take_profit_price = spot_position_price * (1 + upnl_profit_pct)
-                        logging.info(f"Placing spot limit sell order for {symbol} with amount {spot_position_qty} and take profit price {take_profit_price}")
+                        logging.info(f"Placing spot limit sell order for [{symbol}] with amount {spot_position_qty} and take profit price {take_profit_price}")
                         self.place_spot_limit_order(symbol, "sell", spot_position_qty, take_profit_price)
 
                     elif spot_position_qty > 0 and mfi_signal_long and current_price < spot_position_price and not self.entry_order_exists(open_orders, "buy"):
-                        logging.info(f"Placing spot market buy order to add to existing position for {symbol} with amount {long_dynamic_amount}")
+                        logging.info(f"Placing spot market buy order to add to existing position for [{symbol}] with amount {long_dynamic_amount}")
                         self.place_spot_market_order(symbol, "buy", long_dynamic_amount)
                         time.sleep(1)
 
                 else:
-                    logging.info(f"Volume check is disabled or conditions not met for {symbol}, proceeding without volume check.")
+                    logging.info(f"Volume check is disabled or conditions not met for [{symbol}], proceeding without volume check.")
                     time.sleep(5)
 
         except Exception as e:
@@ -2774,7 +2774,7 @@ class BybitStrategy(BaseStrategy):
         best_bid_price = float(order_book['bids'][0][0])
         average_spread = (best_ask_price - best_bid_price) / current_price
 
-        logging.info(f"Average spread for {symbol}: {average_spread}")
+        logging.info(f"Average spread for [{symbol}]: {average_spread}")
 
         # Determine buffer percentages dynamically based on the order book
         if long_pos_qty == 0:
@@ -3019,7 +3019,7 @@ class BybitStrategy(BaseStrategy):
             volumes = [float(order[1]) for order in order_book['asks']]
 
         if not price_points:
-            raise ValueError(f"No {side} orders available in the order book for {symbol}")
+            raise ValueError(f"No {side} orders available in the order book for [{symbol}]")
 
         logging.info(f"[{symbol}] Price points for {side}: {price_points[:levels]}")
         logging.info(f"[{symbol}] Volumes for {side}: {volumes[:levels]}")
@@ -3114,7 +3114,7 @@ class BybitStrategy(BaseStrategy):
             price_points = [order[0] for order in order_book['asks'][:levels]]
 
         if not price_points:
-            raise ValueError(f"No {side} orders available in the order book for {symbol}")
+            raise ValueError(f"No {side} orders available in the order book for [{symbol}]")
 
         # Calculate the price range for the grid levels
         outer_price_long = current_price * (1 - dynamic_distance)
@@ -3222,7 +3222,7 @@ class BybitStrategy(BaseStrategy):
         try:
             # Calculate dynamic outer price distance based on 4h candle spread
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
@@ -3230,7 +3230,7 @@ class BybitStrategy(BaseStrategy):
             # Ensure dynamic outer price distance is not too tight
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
 
-            logging.info(f"Dynamic outer price distance for {symbol}: {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
 
             # Ensure the outer price distance can span all levels
             required_distance = outer_price_distance / levels
@@ -3308,18 +3308,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Check for grid replacement conditions
             has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -3362,7 +3362,7 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['long'] = current_time
                     logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
             # Replace short grid if conditions are met
             if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -3378,21 +3378,21 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['short'] = current_time
                     logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
                     
             # Additional logic for managing open symbols and checking trading permissions
             open_symbols = list(set(open_symbols))
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -3458,7 +3458,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -3470,7 +3470,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -3481,7 +3481,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -3493,7 +3493,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -3503,13 +3503,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -3670,18 +3670,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                 symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -3716,13 +3716,13 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -3806,14 +3806,14 @@ class BybitStrategy(BaseStrategy):
         try:
             # Calculate dynamic outer price distance based on 4h candle spread
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
 
             # Ensure dynamic outer price distance is not too tight
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
-            logging.info(f"Dynamic outer price distance for {symbol}: {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
 
             # Ensure the outer price distance can span all levels
             required_distance = outer_price_distance / levels
@@ -3971,25 +3971,25 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Check for grid replacement conditions
             has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
             has_open_short_order = any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)
 
-            logging.info(f"Symbol {symbol} has open long order: {has_open_long_order}")
-            logging.info(f"Symbol {symbol} has open short order: {has_open_short_order}")
+            logging.info(f"Symbol [{symbol}] has open long order: {has_open_long_order}")
+            logging.info(f"Symbol [{symbol}] has open short order: {has_open_short_order}")
 
             replace_empty_long_grid = (long_pos_qty > 0 and not has_open_long_order)
             replace_empty_short_grid = (short_pos_qty > 0 and not has_open_short_order)
@@ -4018,11 +4018,11 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
 
                 replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                     symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -4041,7 +4041,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['long'] = current_time
                         logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
                 # Replace short grid if conditions are met
                 if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', datetime.min) > timedelta(seconds=240)))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -4055,7 +4055,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['short'] = current_time
                         logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
 
                 # Ensure orders are not issued twice for the same side
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
@@ -4112,7 +4112,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -4126,7 +4126,7 @@ class BybitStrategy(BaseStrategy):
                             self.active_grids.add(symbol)
                             self.placed_levels.setdefault(symbol, {})["buy"] = set(grid_levels_long)  # Update placed levels
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -4139,7 +4139,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -4153,7 +4153,7 @@ class BybitStrategy(BaseStrategy):
                             self.active_grids.add(symbol)
                             self.placed_levels.setdefault(symbol, {})["sell"] = set(grid_levels_short)  # Update placed levels
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -4165,13 +4165,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -4257,7 +4257,7 @@ class BybitStrategy(BaseStrategy):
         try:
             # Calculate dynamic outer price distance based on 4h candle spread
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
@@ -4265,7 +4265,7 @@ class BybitStrategy(BaseStrategy):
             # Ensure dynamic outer price distance is not too tight
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
 
-            logging.info(f"Dynamic outer price distance for {symbol} : {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}] : {dynamic_outer_price_distance}")
 
             # Ensure the outer price distance can span all levels
             required_distance = outer_price_distance / levels
@@ -4338,18 +4338,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Check for grid replacement conditions
             has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -4392,7 +4392,7 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['long'] = current_time
                     logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
             # Replace short grid if conditions are met
             if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -4408,18 +4408,18 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['short'] = current_time
                     logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
                     
             # Additional logic for managing open symbols and checking trading permissions
             open_symbols = list(set(open_symbols))
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -4485,7 +4485,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -4497,7 +4497,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -4508,7 +4508,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -4520,7 +4520,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -4530,13 +4530,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -5024,7 +5024,7 @@ class BybitStrategy(BaseStrategy):
             qty_precision, min_qty = self.get_precision_and_min_qty(symbol)
 
             if drawdown_behavior == "full_distribution":
-                logging.info(f"Activating full distribution drawdown behavior for {symbol}")
+                logging.info(f"Activating full distribution drawdown behavior for [{symbol}]")
 
                 # Calculate order amounts for aggressive drawdown with strength
                 amounts_long = self.calculate_order_amounts_aggressive_drawdown(
@@ -5147,7 +5147,7 @@ class BybitStrategy(BaseStrategy):
 
     def get_spread_and_price(self, symbol):
         spread = self.get_4h_candle_spread(symbol)
-        logging.info(f"4h Candle spread for {symbol}: {spread}")
+        logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
         current_price = self.exchange.get_current_price(symbol)
         logging.info(f"[{symbol}] Current price: {current_price}")
@@ -5383,7 +5383,7 @@ class BybitStrategy(BaseStrategy):
             else:  # side == 'buy'
                 stop_loss_price = current_price * (1 + stop_loss_pct / 100)
 
-            logging.info(f"[{symbol}] Attempting to place a reduce-only {side} order at {stop_loss_price} for {position_qty} {symbol} with positionIdx {positionIdx}")
+            logging.info(f"[{symbol}] Attempting to place a reduce-only {side} order at {stop_loss_price} for {position_qty} [{symbol}] with positionIdx {positionIdx}")
 
             # Retry logic for placing the reduce-only limit order
             max_retries = 5
@@ -5463,7 +5463,7 @@ class BybitStrategy(BaseStrategy):
                     if long_pos_qty <= 0.00001:
                         logging.info(f"[{symbol}] Long position fully closed at stop-loss.")
                         self.clear_grid(symbol, 'buy')
-                        logging.info(f"[{symbol}] Cleared long grid for symbol {symbol}")
+                        logging.info(f"[{symbol}] Cleared long grid for symbol [{symbol}]")
                         self.active_long_grids.discard(symbol)
                         logging.info(f"[{symbol}] Removed from active long grids")
                 else:
@@ -5495,7 +5495,7 @@ class BybitStrategy(BaseStrategy):
                     if short_pos_qty <= 0.00001:
                         logging.info(f"[{symbol}] Short position fully closed at stop-loss.")
                         self.clear_grid(symbol, 'sell')
-                        logging.info(f"[{symbol}] Cleared short grid for symbol {symbol}")
+                        logging.info(f"[{symbol}] Cleared short grid for symbol [{symbol}]")
                         self.active_short_grids.discard(symbol)
                         logging.info(f"[{symbol}] Removed from active short grids")
                 else:
@@ -5529,18 +5529,18 @@ class BybitStrategy(BaseStrategy):
                 symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_long_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_short_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Initialize last_empty_grid_time for symbol if not present
             if symbol not in self.last_empty_grid_time:
@@ -5569,15 +5569,15 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols: {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             fresh_mfirsi_signal = self.generate_l_signals(symbol)
-            logging.info(f"Fresh MFIRSI signal for {symbol}: {fresh_mfirsi_signal}")
+            logging.info(f"Fresh MFIRSI signal for [{symbol}]: {fresh_mfirsi_signal}")
             mfi_signal_long = fresh_mfirsi_signal == "long"
             mfi_signal_short = fresh_mfirsi_signal == "short"
 
-            logging.info(f"MFIRSI SIGNAL FOR {symbol}: {mfirsi_signal}")
+            logging.info(f"MFIRSI SIGNAL FOR [{symbol}]: {mfirsi_signal}")
 
             def issue_grid_safely(side: str, grid_levels: list, amounts: list):
                 """
@@ -5633,7 +5633,7 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['long'] = current_time
                     logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol long, cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol long, cannot replace grid")
 
             # Replace short grid if conditions are met
             if replace_short_grid:
@@ -5645,7 +5645,7 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['short'] = current_time
                     logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol short, cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol short, cannot replace grid")
 
             # Reissuing orders logic
             if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
@@ -5682,7 +5682,7 @@ class BybitStrategy(BaseStrategy):
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -5774,11 +5774,11 @@ class BybitStrategy(BaseStrategy):
 
             if additional_entries_from_signal:
                 if symbol in open_symbols:
-                    logging.info(f"Allowed symbol: {symbol}")
+                    logging.info(f"Allowed symbol: [{symbol}]")
 
                     fresh_signal = self.generate_l_signals(symbol)
 
-                    logging.info(f"Fresh signal for {symbol}: {fresh_signal}")
+                    logging.info(f"Fresh signal for [{symbol}] : {fresh_signal}")
 
                     if not hasattr(self, 'last_mfirsi_signal'):
                         self.last_mfirsi_signal = {}
@@ -5938,7 +5938,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Update TP for long position
             if long_pos_qty > 0:
@@ -5995,13 +5995,13 @@ class BybitStrategy(BaseStrategy):
                                                         max_qty_percent_long: float, max_qty_percent_short: float):
         try:
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
 
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
-            logging.info(f"Dynamic outer price distance for {symbol}: {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
 
             should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(
                 symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
@@ -6181,18 +6181,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Initialize last_empty_grid_time for symbol if not present
             if symbol not in self.last_empty_grid_time:
@@ -6225,16 +6225,16 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
-            logging.info(f"MFIRSI SIGNAL FOR {symbol} {mfirsi_signal}")
+            logging.info(f"MFIRSI SIGNAL FOR [{symbol}] {mfirsi_signal}")
             
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
 
                 replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                     symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -6253,7 +6253,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['long'] = current_time
                         logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
                 # Replace short grid if conditions are met
                 if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -6267,7 +6267,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['short'] = current_time
                         logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
 
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -6322,13 +6322,13 @@ class BybitStrategy(BaseStrategy):
                 current_time = datetime.now()
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -6352,11 +6352,11 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
 
                 fresh_signal = self.generate_l_signals(symbol)
 
-                logging.info(f"Fresh signal for {symbol} : {fresh_signal}")
+                logging.info(f"Fresh signal for [{symbol}] : {fresh_signal}")
 
                 if not hasattr(self, 'last_mfirsi_signal'):
                     self.last_mfirsi_signal = {}
@@ -6480,13 +6480,13 @@ class BybitStrategy(BaseStrategy):
                                                                         max_qty_percent_long: float, max_qty_percent_short: float):
         try:
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
 
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
-            logging.info(f"Dynamic outer price distance for {symbol}: {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
 
             should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(
                 symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
@@ -6671,7 +6671,7 @@ class BybitStrategy(BaseStrategy):
                 self.last_attempted_signal = None
 
             if self.last_attempted_signal == mfirsi_signal and (long_pos_qty > 0.00001 or short_pos_qty > 0.00001):
-                logging.info(f"Skipping processing for {symbol} as the mfirsi_signal is the same as the last attempted signal: {mfirsi_signal}")
+                logging.info(f"Skipping processing for [{symbol}] as the mfirsi_signal is the same as the last attempted signal: {mfirsi_signal}")
                 return
 
             # Handle long and short grid replacement based on mfirsi_signal
@@ -6714,7 +6714,7 @@ class BybitStrategy(BaseStrategy):
             #     self.last_attempted_signal = None
 
             # if self.last_attempted_signal == mfirsi_signal and (long_pos_qty > 0.00001 or short_pos_qty > 0.00001):
-            #     logging.info(f"Skipping processing for {symbol} as the mfirsi_signal is the same as the last attempted signal: {mfirsi_signal}")
+            #     logging.info(f"Skipping processing for [{symbol}] as the mfirsi_signal is the same as the last attempted signal: {mfirsi_signal}")
             #     return
 
             # # Handle long and short grid replacement based on mfirsi_signal
@@ -6753,18 +6753,18 @@ class BybitStrategy(BaseStrategy):
             #             break  # Exit loop once the order is filled
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Initialize last_empty_grid_time for symbol if not present
             if symbol not in self.last_empty_grid_time:
@@ -6797,19 +6797,19 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
 
                 has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
                 has_open_short_order = any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)
 
-                logging.info(f"MFIRSI Signal for {symbol} : {mfirsi_signal}")
+                logging.info(f"MFIRSI Signal for [{symbol}] : {mfirsi_signal}")
 
                 replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                     symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -6828,7 +6828,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['long'] = current_time
                         logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
                 # Replace short grid if conditions are met
                 if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -6842,7 +6842,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['short'] = current_time
                         logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
 
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -6909,7 +6909,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -6921,7 +6921,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -6932,7 +6932,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -6944,7 +6944,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -6954,13 +6954,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -7048,13 +7048,13 @@ class BybitStrategy(BaseStrategy):
                                                         max_qty_percent_long: float, max_qty_percent_short: float):
         try:
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
 
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
-            logging.info(f"Dynamic outer price distance for {symbol}: {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
 
             should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(
                 symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
@@ -7236,18 +7236,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Initialize last_empty_grid_time for symbol if not present
             if symbol not in self.last_empty_grid_time:
@@ -7280,14 +7280,14 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
             
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
 
                 replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                     symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -7306,7 +7306,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['long'] = current_time
                         logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
                 # Replace short grid if conditions are met
                 if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -7320,7 +7320,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['short'] = current_time
                         logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
 
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -7387,7 +7387,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -7399,7 +7399,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -7410,7 +7410,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -7422,7 +7422,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -7432,13 +7432,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -7479,7 +7479,7 @@ class BybitStrategy(BaseStrategy):
         try:
             # Calculate dynamic outer price distance based on 4h candle spread
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
@@ -7487,7 +7487,7 @@ class BybitStrategy(BaseStrategy):
             # Ensure dynamic outer price distance is not too tight
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
             
-            logging.info(f"Dynamic outer price distance for {symbol} : {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}] : {dynamic_outer_price_distance}")
             
             # Ensure the outer price distance can span all levels
             required_distance = outer_price_distance / levels
@@ -7655,18 +7655,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Check for grid replacement conditions
             has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -7695,14 +7695,14 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
             
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
 
                 replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                     symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -7721,7 +7721,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['long'] = current_time
                         logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
                 # Replace short grid if conditions are met
                 if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -7735,7 +7735,7 @@ class BybitStrategy(BaseStrategy):
                         self.last_empty_grid_time[symbol]['short'] = current_time
                         logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                     else:
-                        logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                        logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
 
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -7802,7 +7802,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -7814,7 +7814,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -7825,7 +7825,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -7837,7 +7837,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -7847,13 +7847,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -7895,7 +7895,7 @@ class BybitStrategy(BaseStrategy):
         try:
             # Calculate dynamic outer price distance based on 4h candle spread
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for {symbol}: {spread}")
+            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
             logging.info(f"[{symbol}] Current price: {current_price}")
@@ -7903,7 +7903,7 @@ class BybitStrategy(BaseStrategy):
             # Ensure dynamic outer price distance is not too tight
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
             
-            logging.info(f"Dynamic outer price distance for {symbol} : {dynamic_outer_price_distance}")
+            logging.info(f"Dynamic outer price distance for [{symbol}] : {dynamic_outer_price_distance}")
             
             # Ensure the outer price distance can span all levels
             required_distance = outer_price_distance / levels
@@ -7976,18 +7976,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Check for grid replacement conditions
             has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -8030,7 +8030,7 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['long'] = current_time
                     logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol long cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
 
             # Replace short grid if conditions are met
             if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
@@ -8046,22 +8046,22 @@ class BybitStrategy(BaseStrategy):
                     self.last_empty_grid_time[symbol]['short'] = current_time
                     logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol short cannot replace grid")
+                    logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
                     
             # Additional logic for managing open symbols and checking trading permissions
             open_symbols = list(set(open_symbols))
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
             mfi_signal_neutral = mfirsi_signal.lower() == "neutral"
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -8127,7 +8127,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -8139,7 +8139,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -8150,7 +8150,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -8162,7 +8162,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -8172,13 +8172,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -8360,18 +8360,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                 symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -8494,14 +8494,14 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -8567,7 +8567,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -8579,7 +8579,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -8590,7 +8590,7 @@ class BybitStrategy(BaseStrategy):
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -8602,7 +8602,7 @@ class BybitStrategy(BaseStrategy):
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
                             logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -8612,13 +8612,13 @@ class BybitStrategy(BaseStrategy):
                             logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -8775,18 +8775,18 @@ class BybitStrategy(BaseStrategy):
 
             # Auto-reduce and grid replacement logic
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer(
                 symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -8823,14 +8823,14 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -8895,7 +8895,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders) and symbol not in self.max_qty_reached_symbol_long:
                             self.cancel_grid_orders(symbol, "buy")
@@ -8936,7 +8936,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -8946,7 +8946,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -8955,13 +8955,13 @@ class BybitStrategy(BaseStrategy):
                             else:
                                 logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -9118,18 +9118,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                 symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -9172,8 +9172,8 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
@@ -9184,7 +9184,7 @@ class BybitStrategy(BaseStrategy):
             max_qty_long, max_qty_short = self.calculate_max_positions(symbol, total_equity, current_price, max_qty_percent_long, max_qty_percent_short)
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -9249,7 +9249,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders) and symbol not in self.max_qty_reached_symbol_long:
                             self.cancel_grid_orders(symbol, "buy")
@@ -9290,7 +9290,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -9300,7 +9300,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -9309,13 +9309,13 @@ class BybitStrategy(BaseStrategy):
                             else:
                                 logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -9492,19 +9492,19 @@ class BybitStrategy(BaseStrategy):
 
             # Log auto-reduce status for long position
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             # Log auto-reduce status for short position
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Determine if grids need replacement based on dynamic buffer
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer(
@@ -9543,19 +9543,19 @@ class BybitStrategy(BaseStrategy):
 
             # Check if trading a new symbol is allowed based on open symbols and allowed count
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             # Set MFI signals for long and short
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 # Reissue orders if necessary based on the reissue threshold and current orders
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
-                    #logging.info(f"Open orders for {symbol}: {open_orders}")
+                    #logging.info(f"Open orders for [{symbol}]: {open_orders}")
 
                     # Flags to check for existing buy or sell orders, excluding reduce-only orders
                     has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -9623,7 +9623,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders):
                             # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -9671,7 +9671,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -9681,7 +9681,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -9690,7 +9690,7 @@ class BybitStrategy(BaseStrategy):
                             else:
                                 logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
                 
             # Check if there is room for trading new symbols
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
@@ -9849,18 +9849,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer(
                 symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -9894,14 +9894,14 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -9966,7 +9966,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders) and symbol not in self.max_qty_reached_symbol_long:
                             self.cancel_grid_orders(symbol, "buy")
@@ -10007,7 +10007,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -10017,7 +10017,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -10026,13 +10026,13 @@ class BybitStrategy(BaseStrategy):
                             else:
                                 logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -10208,19 +10208,19 @@ class BybitStrategy(BaseStrategy):
 
             # Log auto-reduce status for long position
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             # Log auto-reduce status for short position
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Determine if grids need replacement based on dynamic buffer
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer(
@@ -10257,8 +10257,8 @@ class BybitStrategy(BaseStrategy):
 
             # Check if trading a new symbol is allowed based on open symbols and allowed count
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             # Set MFI signals for long and short
             mfi_signal_long = mfirsi_signal.lower() == "long"
@@ -10267,11 +10267,11 @@ class BybitStrategy(BaseStrategy):
             # self.check_and_manage_positions(long_pos_qty, short_pos_qty, symbol, total_equity, current_price, max_qty_percent_long, max_qty_percent_short)
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 # Reissue orders if necessary based on the reissue threshold and current orders
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
-                    #logging.info(f"Open orders for {symbol}: {open_orders}")
+                    #logging.info(f"Open orders for [{symbol}]: {open_orders}")
 
                     # Flags to check for existing buy or sell orders, excluding reduce-only orders
                     has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -10339,7 +10339,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders):
                             # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -10387,7 +10387,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -10397,7 +10397,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -10406,7 +10406,7 @@ class BybitStrategy(BaseStrategy):
                             else:
                                 logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
                 
             # Check if there is room for trading new symbols
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
@@ -10581,18 +10581,18 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_dynamic(
                 symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -10638,8 +10638,8 @@ class BybitStrategy(BaseStrategy):
                 logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
@@ -10647,7 +10647,7 @@ class BybitStrategy(BaseStrategy):
             max_qty_long, max_qty_short = self.calculate_max_positions(symbol, total_equity, current_price, max_qty_percent_long, max_qty_percent_short)
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
@@ -10712,7 +10712,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders) and symbol not in self.max_qty_reached_symbol_long:
                             self.cancel_grid_orders(symbol, "buy")
@@ -10753,7 +10753,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -10763,7 +10763,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -10772,13 +10772,13 @@ class BybitStrategy(BaseStrategy):
                             else:
                                 logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
             else:
-                logging.info(f"Symbol {symbol} not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"{symbol} has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
             logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
@@ -10951,19 +10951,19 @@ class BybitStrategy(BaseStrategy):
 
             # Log auto-reduce status for long position
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             # Log auto-reduce status for short position
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Determine if the grid needs to be replaced based on the dynamic buffer adjustments
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_dynamic(
@@ -11089,19 +11089,19 @@ class BybitStrategy(BaseStrategy):
 
             # Check if trading a new symbol is allowed based on open symbols and allowed count
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             # Set MFI signals for long and short
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 # Reissue orders if necessary based on the reissue threshold and current orders
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
-                    #logging.info(f"Open orders for {symbol}: {open_orders}")
+                    #logging.info(f"Open orders for [{symbol}]: {open_orders}")
 
                     # Flags to check for existing buy or sell orders, excluding reduce-only orders
                     has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -11159,7 +11159,7 @@ class BybitStrategy(BaseStrategy):
                     self.active_grids.discard(symbol)  # Remove the symbol from active grids
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders):
                             # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -11207,7 +11207,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -11217,7 +11217,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -11400,19 +11400,19 @@ class BybitStrategy(BaseStrategy):
 
             # Log auto-reduce status for long position
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             # Log auto-reduce status for short position
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Determine if the grid needs to be replaced based on the dynamic buffer adjustments
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer(
@@ -11450,19 +11450,19 @@ class BybitStrategy(BaseStrategy):
 
             # Check if trading a new symbol is allowed based on open symbols and allowed count
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             # Set MFI signals for long and short
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 # Reissue orders if necessary based on the reissue threshold and current orders
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
-                    #logging.info(f"Open orders for {symbol}: {open_orders}")
+                    #logging.info(f"Open orders for [{symbol}]: {open_orders}")
 
                     # Flags to check for existing buy or sell orders, excluding reduce-only orders
                     has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -11528,7 +11528,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders):
                             # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -11576,7 +11576,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -11586,7 +11586,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -11758,19 +11758,19 @@ class BybitStrategy(BaseStrategy):
 
             # Log auto-reduce status for long position
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on {symbol} is active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
 
             # Log auto-reduce status for short position
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on {symbol} is active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
 
             # Determine if the grid needs to be replaced based on the dynamic buffer adjustments
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer(
@@ -11808,19 +11808,19 @@ class BybitStrategy(BaseStrategy):
 
             # Check if trading a new symbol is allowed based on open symbols and allowed count
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             # Set MFI signals for long and short
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed:
-                logging.info(f"Allowed symbol: {symbol}")
+                logging.info(f"Allowed symbol: [{symbol}]")
                 # Reissue orders if necessary based on the reissue threshold and current orders
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
-                    #logging.info(f"Open orders for {symbol}: {open_orders}")
+                    #logging.info(f"Open orders for [{symbol}]: {open_orders}")
 
                     # Flags to check for existing buy or sell orders, excluding reduce-only orders
                     has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -11886,7 +11886,7 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                    logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                     if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                         if (should_reissue_long or long_pos_qty > 0) and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders):
                             # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -11934,7 +11934,7 @@ class BybitStrategy(BaseStrategy):
                                 self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                 else:
                     if self.auto_reduce_active_long.get(symbol, False):
-                        logging.info(f"Auto-reduce for long position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                         if long_mode and (mfi_signal_long or long_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -11944,7 +11944,7 @@ class BybitStrategy(BaseStrategy):
                                 logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                     if self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for short position on {symbol} is active, entry during auto-reduce.")
+                        logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                         if short_mode and (mfi_signal_short or short_pos_qty > 0):
                             if entry_during_autoreduce:
                                 logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
@@ -12108,15 +12108,15 @@ class BybitStrategy(BaseStrategy):
                 logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
                 trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-                logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-                logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+                logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+                logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
                 mfi_signal_long = mfirsi_signal.lower() == "long"
                 mfi_signal_short = mfirsi_signal.lower() == "short"
 
                 if self.should_reissue_orders(symbol, reissue_threshold):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
-                    #logging.info(f"Open orders for {symbol}: {open_orders}")
+                    #logging.info(f"Open orders for [{symbol}]: {open_orders}")
 
                     # Flags to check existence of buy or sell orders, excluding reduce-only orders
                     has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
@@ -12144,7 +12144,7 @@ class BybitStrategy(BaseStrategy):
                             
                 if symbol in open_symbols or trading_allowed:
                     if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                        logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                         if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                             if should_reissue or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)) or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                                 # Cancel existing long and short grid orders if should_reissue or positions exist but no corresponding orders
@@ -12185,7 +12185,7 @@ class BybitStrategy(BaseStrategy):
                                     self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                     else:
                         if not self.auto_reduce_active_long.get(symbol, False):
-                            logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                            logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                             if long_mode and (mfi_signal_long or (long_pos_qty > 0 and not long_grid_active)):
                                 if should_reissue or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                                     # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -12201,10 +12201,10 @@ class BybitStrategy(BaseStrategy):
                                     else:
                                         logging.info(f"[{symbol}] Skipping new long grid orders due to active auto-reduce.")
                         else:
-                            logging.info(f"Auto-reduce for long position on {symbol} is active, skipping entry")
+                            logging.info(f"Auto-reduce for long position on [{symbol}] is active, skipping entry")
 
                         if not self.auto_reduce_active_short.get(symbol, False):
-                            logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                            logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                             if short_mode and (mfi_signal_short or (short_pos_qty > 0 and not short_grid_active)):
                                 if should_reissue or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                                     # Cancel existing short grid orders if should_reissue or short position exists but no sell orders (excluding TP orders)
@@ -12220,7 +12220,7 @@ class BybitStrategy(BaseStrategy):
                                     else:
                                         logging.info(f"[{symbol}] Skipping new short grid orders due to active auto-reduce.")
                         else:
-                            logging.info(f"Auto-reduce for short position on {symbol} is active, skipping entry")
+                            logging.info(f"Auto-reduce for short position on [{symbol}] is active, skipping entry")
 
                     # Check if there is room for trading new symbols
                     logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
@@ -12373,15 +12373,15 @@ class BybitStrategy(BaseStrategy):
                 logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
                 trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-                logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-                logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+                logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+                logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
                 mfi_signal_long = mfirsi_signal.lower() == "long"
                 mfi_signal_short = mfirsi_signal.lower() == "short"
 
                 if symbol in open_symbols or trading_allowed:
                     if not self.auto_reduce_active_long.get(symbol, False) and not self.auto_reduce_active_short.get(symbol, False):
-                        logging.info(f"Auto-reduce for long and short positions on {symbol} is not active")
+                        logging.info(f"Auto-reduce for long and short positions on [{symbol}] is not active")
                         if long_mode and short_mode and ((mfi_signal_long or long_pos_qty > 0) and (mfi_signal_short or short_pos_qty > 0)):
                             if should_reissue or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)) or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                                 # Cancel existing long and short grid orders if should_reissue or positions exist but no corresponding orders
@@ -12422,7 +12422,7 @@ class BybitStrategy(BaseStrategy):
                                     self.active_grids.add(symbol)  # Mark the symbol as having an active grid
                     else:
                         if not self.auto_reduce_active_long.get(symbol, False):
-                            logging.info(f"Auto-reduce for long position on {symbol} is not active")
+                            logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
                             if long_mode and (mfi_signal_long or (long_pos_qty > 0 and not long_grid_active)):
                                 if should_reissue or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                                     # Cancel existing long grid orders if should_reissue or long position exists but no buy orders (excluding TP orders)
@@ -12438,10 +12438,10 @@ class BybitStrategy(BaseStrategy):
                                     else:
                                         logging.info(f"[{symbol}] Skipping new long grid orders due to active auto-reduce.")
                         else:
-                            logging.info(f"Auto-reduce for long position on {symbol} is active, skipping entry")
+                            logging.info(f"Auto-reduce for long position on [{symbol}] is active, skipping entry")
 
                         if not self.auto_reduce_active_short.get(symbol, False):
-                            logging.info(f"Auto-reduce for short position on {symbol} is not active")
+                            logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
                             if short_mode and (mfi_signal_short or (short_pos_qty > 0 and not short_grid_active)):
                                 if should_reissue or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                                     # Cancel existing short grid orders if should_reissue or short position exists but no sell orders (excluding TP orders)
@@ -12457,7 +12457,7 @@ class BybitStrategy(BaseStrategy):
                                     else:
                                         logging.info(f"[{symbol}] Skipping new short grid orders due to active auto-reduce.")
                         else:
-                            logging.info(f"Auto-reduce for short position on {symbol} is active, skipping entry")
+                            logging.info(f"Auto-reduce for short position on [{symbol}] is active, skipping entry")
 
                     # Check if there is room for trading new symbols
                     logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
@@ -12573,8 +12573,8 @@ class BybitStrategy(BaseStrategy):
                 logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
                 trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-                logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-                logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+                logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+                logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
                 mfi_signal_long = mfirsi_signal.lower() == "long"
                 mfi_signal_short = mfirsi_signal.lower() == "short"
@@ -12673,8 +12673,8 @@ class BybitStrategy(BaseStrategy):
                 logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
                 trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-                logging.info(f"Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-                logging.info(f"Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+                logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+                logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
                 if symbol in open_symbols or trading_allowed:
                     if long_mode and not long_grid_active:
@@ -13008,7 +13008,7 @@ class BybitStrategy(BaseStrategy):
             self.filled_levels[symbol]["sell"].clear()
             self.active_short_grids.discard(symbol)  # Remove the symbol from active short grids
         
-        logging.info(f"Cleared {side} grid for {symbol}.")
+        logging.info(f"Cleared {side} grid for [{symbol}].")
     
 
     def generate_order_link_id(self, symbol, side, level):
@@ -13033,15 +13033,15 @@ class BybitStrategy(BaseStrategy):
 
             # Clear existing grid before placing new orders
             if is_long:
-                logging.info(f"Clearing existing long grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+                logging.info(f"Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
                 self.clear_grid(symbol, 'buy')
                 self.last_reissue_price_long[symbol] = current_price
-                logging.info(f"Updated last reissue price for long orders of {symbol} to {current_price}")
+                logging.info(f"Updated last reissue price for long orders of [{symbol}] to {current_price}")
             else:
-                logging.info(f"Clearing existing short grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+                logging.info(f"Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
                 self.clear_grid(symbol, 'sell')
                 self.last_reissue_price_short[symbol] = current_price
-                logging.info(f"Updated last reissue price for short orders of {symbol} to {current_price}")
+                logging.info(f"Updated last reissue price for short orders of [{symbol}] to {current_price}")
 
             # Clear the filled_levels set before placing new orders
             filled_levels.clear()
@@ -13070,14 +13070,14 @@ class BybitStrategy(BaseStrategy):
                     try:
                         order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
                         if order and 'id' in order:
-                            logging.info(f"Placed {side} order at level {level} for {symbol} with amount {amount}")
+                            logging.info(f"Placed {side} order at level {level} for [{symbol}] with amount {amount}")
                             filled_levels.add(level)  # Add the level to filled_levels
                         else:
-                            logging.info(f"Failed to place {side} order at level {level} for {symbol} with amount {amount}")
+                            logging.info(f"Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
                     except Exception as e:
-                        logging.error(f"Exception when placing {side} order at level {level} for {symbol}: {e}")
+                        logging.error(f"Exception when placing {side} order at level {level} for [{symbol}]: {e}")
                 else:
-                    logging.info(f"Skipping {side} order at level {level} for {symbol} as it already exists.")
+                    logging.info(f"Skipping {side} order at level {level} for [{symbol}] as it already exists.")
 
             logging.info(f"[{symbol}] {side.capitalize()} grid orders issued for unfilled levels.")
         except Exception as e:
@@ -13094,15 +13094,15 @@ class BybitStrategy(BaseStrategy):
 
     #     # Clear existing grid before placing new orders
     #     if is_long:
-    #         logging.info(f"Clearing existing long grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+    #         logging.info(f"Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
     #         self.clear_grid(symbol, 'buy')
     #         self.last_reissue_price_long[symbol] = current_price
-    #         logging.info(f"Updated last reissue price for long orders of {symbol} to {current_price}")
+    #         logging.info(f"Updated last reissue price for long orders of [{symbol}] to {current_price}")
     #     else:
-    #         logging.info(f"Clearing existing short grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+    #         logging.info(f"Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
     #         self.clear_grid(symbol, 'sell')
     #         self.last_reissue_price_short[symbol] = current_price
-    #         logging.info(f"Updated last reissue price for short orders of {symbol} to {current_price}")
+    #         logging.info(f"Updated last reissue price for short orders of [{symbol}] to {current_price}")
 
     #     # Clear the filled_levels set before placing new orders
     #     filled_levels.clear()
@@ -13120,14 +13120,14 @@ class BybitStrategy(BaseStrategy):
     #             try:
     #                 order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
     #                 if order and 'id' in order:
-    #                     logging.info(f"Placed {side} order at level {level} for {symbol} with amount {amount}")
+    #                     logging.info(f"Placed {side} order at level {level} for [{symbol}] with amount {amount}")
     #                     filled_levels.add(level)  # Add the level to filled_levels
     #                 else:
-    #                     logging.info(f"Failed to place {side} order at level {level} for {symbol} with amount {amount}")
+    #                     logging.info(f"Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
     #             except Exception as e:
-    #                 logging.info(f"Exception when placing {side} order at level {level} for {symbol}: {e}")
+    #                 logging.info(f"Exception when placing {side} order at level {level} for [{symbol}]: {e}")
     #         else:
-    #             logging.info(f"Skipping {side} order at level {level} for {symbol} as it already exists.")
+    #             logging.info(f"Skipping {side} order at level {level} for [{symbol}] as it already exists.")
 
     #     logging.info(f"[{symbol}] {side.capitalize()} grid orders issued for unfilled levels.")
 
@@ -13143,15 +13143,15 @@ class BybitStrategy(BaseStrategy):
 
     #     # Clear existing grid before placing new orders
     #     if is_long:
-    #         logging.info(f"Clearing existing long grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+    #         logging.info(f"Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
     #         self.clear_grid(symbol, 'buy')
     #         self.last_reissue_price_long[symbol] = current_price
-    #         logging.info(f"Updated last reissue price for long orders of {symbol} to {current_price}")
+    #         logging.info(f"Updated last reissue price for long orders of [{symbol}] to {current_price}")
     #     else:
-    #         logging.info(f"Clearing existing short grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+    #         logging.info(f"Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
     #         self.clear_grid(symbol, 'sell')
     #         self.last_reissue_price_short[symbol] = current_price
-    #         logging.info(f"Updated last reissue price for short orders of {symbol} to {current_price}")
+    #         logging.info(f"Updated last reissue price for short orders of [{symbol}] to {current_price}")
 
     #     # Clear the filled_levels set before placing new orders
     #     filled_levels.clear()
@@ -13169,14 +13169,14 @@ class BybitStrategy(BaseStrategy):
     #             try:
     #                 order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
     #                 if order and 'id' in order:
-    #                     logging.info(f"Placed {side} order at level {level} for {symbol} with amount {amount}")
+    #                     logging.info(f"Placed {side} order at level {level} for [{symbol}] with amount {amount}")
     #                     filled_levels.add(level)  # Add the level to filled_levels
     #                 else:
-    #                     logging.info(f"Failed to place {side} order at level {level} for {symbol} with amount {amount}")
+    #                     logging.info(f"Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
     #             except Exception as e:
-    #                 logging.info(f"Exception when placing {side} order at level {level} for {symbol}: {e}")
+    #                 logging.info(f"Exception when placing {side} order at level {level} for [{symbol}]: {e}")
     #         else:
-    #             logging.info(f"Skipping {side} order at level {level} for {symbol} as it already exists.")
+    #             logging.info(f"Skipping {side} order at level {level} for [{symbol}] as it already exists.")
 
     #     logging.info(f"[{symbol}] {side.capitalize()} grid orders issued for unfilled levels.")
 
@@ -13191,15 +13191,15 @@ class BybitStrategy(BaseStrategy):
 
     #     # Clear existing grid before placing new orders
     #     if is_long:
-    #         logging.info(f"Clearing existing long grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+    #         logging.info(f"Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
     #         self.clear_grid(symbol, 'buy')
     #         self.last_reissue_price_long[symbol] = current_price
-    #         logging.info(f"Updated last reissue price for long orders of {symbol} to {current_price}")
+    #         logging.info(f"Updated last reissue price for long orders of [{symbol}] to {current_price}")
     #     else:
-    #         logging.info(f"Clearing existing short grid for {symbol} before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+    #         logging.info(f"Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
     #         self.clear_grid(symbol, 'sell')
     #         self.last_reissue_price_short[symbol] = current_price
-    #         logging.info(f"Updated last reissue price for short orders of {symbol} to {current_price}")
+    #         logging.info(f"Updated last reissue price for short orders of [{symbol}] to {current_price}")
 
     #     # Clear the filled_levels set before placing new orders
     #     filled_levels.clear()
@@ -13213,14 +13213,14 @@ class BybitStrategy(BaseStrategy):
     #             try:
     #                 order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
     #                 if order and 'id' in order:
-    #                     logging.info(f"Placed {side} order at level {level} for {symbol} with amount {amount}")
+    #                     logging.info(f"Placed {side} order at level {level} for [{symbol}] with amount {amount}")
     #                     filled_levels.add(level)  # Add the level to filled_levels
     #                 else:
-    #                     logging.info(f"Failed to place {side} order at level {level} for {symbol} with amount {amount}")
+    #                     logging.info(f"Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
     #             except Exception as e:
-    #                 logging.info(f"Exception when placing {side} order at level {level} for {symbol}: {e}")
+    #                 logging.info(f"Exception when placing {side} order at level {level} for [{symbol}]: {e}")
     #         else:
-    #             logging.info(f"Skipping {side} order at level {level} for {symbol} as it already exists.")
+    #             logging.info(f"Skipping {side} order at level {level} for [{symbol}] as it already exists.")
 
     #     logging.info(f"[{symbol}] {side.capitalize()} grid orders issued for unfilled levels.")
 
@@ -13233,31 +13233,31 @@ class BybitStrategy(BaseStrategy):
                 if order['side'].lower() == side.lower():
                     self.exchange.cancel_order_by_id(order['id'], symbol)
                     orders_canceled += 1
-                    logging.info(f"Canceled order {order['id']} for {symbol}")
+                    logging.info(f"Canceled order {order['id']} for [{symbol}]")
 
             if orders_canceled > 0:
-                logging.info(f"Canceled {orders_canceled} {side} grid orders for {symbol}")
+                logging.info(f"Canceled {orders_canceled} {side} grid orders for [{symbol}]")
             else:
-                logging.info(f"No {side} grid orders found for {symbol}")
+                logging.info(f"No {side} grid orders found for [{symbol}]")
 
             # Remove the symbol from active grids
             if side.lower() == 'buy':
                 self.active_long_grids.discard(symbol)
-                logging.info(f"Removed {symbol} from active long grids")
+                logging.info(f"Removed [{symbol}] from active long grids")
             elif side.lower() == 'sell':
                 self.active_short_grids.discard(symbol)
-                logging.info(f"Removed {symbol} from active short grids")
+                logging.info(f"Removed [{symbol}] from active short grids")
 
         except Exception as e:
-            logging.error(f"Exception in cancel_grid_orders for {symbol} - {side}: {e}")
+            logging.error(f"Exception in cancel_grid_orders for [{symbol}] - {side}: {e}")
             logging.error("Traceback: %s", traceback.format_exc())
 
     def calculate_total_amount(self, symbol: str, total_equity: float, best_ask_price: float, best_bid_price: float, wallet_exposure_limit: float, user_defined_leverage: float, side: str, levels: int, min_qty: float, enforce_full_grid: bool) -> float:
-        logging.info(f"Calculating total amount for {symbol} with total_equity: {total_equity}, best_ask_price: {best_ask_price}, best_bid_price: {best_bid_price}, wallet_exposure_limit: {wallet_exposure_limit}, user_defined_leverage: {user_defined_leverage}, side: {side}, levels: {levels}, min_qty: {min_qty}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"Calculating total amount for [{symbol}] with total_equity: {total_equity}, best_ask_price: {best_ask_price}, best_bid_price: {best_bid_price}, wallet_exposure_limit: {wallet_exposure_limit}, user_defined_leverage: {user_defined_leverage}, side: {side}, levels: {levels}, min_qty: {min_qty}, enforce_full_grid: {enforce_full_grid}")
         
         # Fetch market data to get the minimum trade quantity for the symbol
         market_data = self.get_market_data_with_retry(symbol, max_retries=100, retry_delay=5)
-        logging.info(f"Minimum quantity for {symbol}: {min_qty}")
+        logging.info(f"Minimum quantity for [{symbol}]: {min_qty}")
         
         # Calculate the minimum quantity in USD value based on the side
         if side == "buy":
@@ -13266,11 +13266,11 @@ class BybitStrategy(BaseStrategy):
             min_qty_usd_value = min_qty * best_bid_price
         else:
             raise ValueError(f"Invalid side: {side}")
-        logging.info(f"Minimum quantity USD value for {symbol}: {min_qty_usd_value}")
+        logging.info(f"Minimum quantity USD value for [{symbol}]: {min_qty_usd_value}")
         
         # Calculate the maximum position value based on total equity, wallet exposure limit, and user-defined leverage
         max_position_value = total_equity * wallet_exposure_limit * user_defined_leverage
-        logging.info(f"Maximum {side} position value for {symbol}: {max_position_value}")
+        logging.info(f"Maximum {side} position value for [{symbol}]: {max_position_value}")
         
         if enforce_full_grid:
             # Calculate the total amount based on the maximum position value and number of levels
@@ -13346,7 +13346,7 @@ class BybitStrategy(BaseStrategy):
         if user_defined_leverage in (0, None):
             # Log the defaulting action for clarity
             max_leverage = self.exchange.get_current_max_leverage_bybit(symbol, side)
-            logging.info(f"No user-defined leverage specified for {symbol} on {side} side, using exchange max leverage: {max_leverage}")
+            logging.info(f"No user-defined leverage specified for [{symbol}] on {side} side, using exchange max leverage: {max_leverage}")
             return max_leverage
         return user_defined_leverage
     
@@ -13360,14 +13360,14 @@ class BybitStrategy(BaseStrategy):
                                                     wallet_exposure_limit_short: float, 
                                                     levels: int, qty_precision: float, 
                                                     side: str, strength: float, long_pos_qty=0, short_pos_qty=0) -> List[float]:
-        logging.info(f"Calculating aggressive drawdown order amounts for {symbol} with full position value distribution across {levels} levels.")
+        logging.info(f"Calculating aggressive drawdown order amounts for [{symbol}] with full position value distribution across {levels} levels.")
         
         # Determine the wallet exposure limit based on the side
         wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
         
         # Calculate the maximum position value for the symbol
         max_position_value = total_equity * wallet_exposure_limit
-        logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+        logging.info(f"Maximum position value for [{symbol}]: {max_position_value}")
 
         # Calculate the current position value
         if side == 'buy':
@@ -13377,7 +13377,7 @@ class BybitStrategy(BaseStrategy):
 
         # Adjust the maximum position value by subtracting the current position value
         adjusted_max_position_value = max_position_value - current_pos_value
-        logging.info(f"Adjusted maximum position value for {symbol} after considering current position: {adjusted_max_position_value}")
+        logging.info(f"Adjusted maximum position value for [{symbol}] after considering current position: {adjusted_max_position_value}")
 
         # Distribute the full adjusted max position value across the specified number of levels
         amounts = []
@@ -13401,11 +13401,11 @@ class BybitStrategy(BaseStrategy):
     #                                                 wallet_exposure_limit_long, wallet_exposure_limit_short, 
     #                                                 side, levels, enforce_full_grid, 
     #                                                 long_pos_qty=0, short_pos_qty=0):
-    #     logging.info(f"Calculating total amount for {symbol} with total_balance: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
+    #     logging.info(f"Calculating total amount for [{symbol}] with total_balance: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
 
     #     wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
     #     max_position_value = total_equity * wallet_exposure_limit
-    #     logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+    #     logging.info(f"Maximum position value for [{symbol}]: {max_position_value}")
 
     #     if enforce_full_grid:
     #         required_notional = max_position_value / levels
@@ -13420,18 +13420,18 @@ class BybitStrategy(BaseStrategy):
     #     adjusted_max_position_value = max_position_value - current_pos_value
     #     total_notional_amount = min(required_notional, adjusted_max_position_value)
         
-    #     logging.info(f"Calculated total notional amount for {symbol}: {total_notional_amount}")
+    #     logging.info(f"Calculated total notional amount for [{symbol}]: {total_notional_amount}")
     #     return total_notional_amount
 
     # def calculate_total_amount_notional_ls_properdca(self, symbol, total_equity, best_ask_price, best_bid_price, 
     #                                                 wallet_exposure_limit_long, wallet_exposure_limit_short, 
     #                                                 side, levels, enforce_full_grid, 
     #                                                 long_pos_qty=0, short_pos_qty=0):
-    #     logging.info(f"Calculating total amount for {symbol} with total_balance: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
+    #     logging.info(f"Calculating total amount for [{symbol}] with total_balance: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
 
     #     wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
     #     max_position_value = total_equity * wallet_exposure_limit
-    #     logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+    #     logging.info(f"Maximum position value for [{symbol}]: {max_position_value}")
 
     #     # Convert to float to ensure correct type
     #     try:
@@ -13466,18 +13466,18 @@ class BybitStrategy(BaseStrategy):
     #     adjusted_max_position_value = max_position_value - current_pos_value
     #     total_notional_amount = min(required_notional, adjusted_max_position_value)
         
-    #     logging.info(f"Calculated total notional amount for {symbol}: {total_notional_amount}")
+    #     logging.info(f"Calculated total notional amount for [{symbol}]: {total_notional_amount}")
     #     return total_notional_amount
 
     def calculate_total_amount_notional_ls_properdca(self, symbol, total_equity, best_ask_price, best_bid_price, 
                                                     wallet_exposure_limit_long, wallet_exposure_limit_short, 
                                                     side, levels, enforce_full_grid, 
                                                     long_pos_qty=0, short_pos_qty=0):
-        logging.info(f"Calculating total amount for {symbol} with total_balance: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"Calculating total amount for [{symbol}] with total_balance: {total_equity}, side: {side}, levels: {levels}, enforce_full_grid: {enforce_full_grid}")
 
         wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
         max_position_value = total_equity * wallet_exposure_limit
-        logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+        logging.info(f"Maximum position value for [{symbol}]: {max_position_value}")
 
         # Convert to float to ensure correct type
         try:
@@ -13501,27 +13501,27 @@ class BybitStrategy(BaseStrategy):
             required_notional = max_position_value
 
         if side == 'buy':
-            logging.info(f"For {symbol} Type of long_pos_qty before multiplication: {type(long_pos_qty)}, value: {long_pos_qty}")
-            logging.info(f"For {symbol} Type of best_ask_price before multiplication: {type(best_ask_price)}, value: {best_ask_price}")
+            logging.info(f"For [{symbol}] Type of long_pos_qty before multiplication: {type(long_pos_qty)}, value: {long_pos_qty}")
+            logging.info(f"For [{symbol}] Type of best_ask_price before multiplication: {type(best_ask_price)}, value: {best_ask_price}")
             current_pos_value = long_pos_qty * best_ask_price
         else:
-            logging.info(f"For {symbol} Type of short_pos_qty before multiplication: {type(short_pos_qty)}, value: {short_pos_qty}")
-            logging.info(f"For {symbol} Type of best_bid_price before multiplication: {type(best_bid_price)}, value: {best_bid_price}")
+            logging.info(f"For [{symbol}] Type of short_pos_qty before multiplication: {type(short_pos_qty)}, value: {short_pos_qty}")
+            logging.info(f"For [{symbol}] Type of best_bid_price before multiplication: {type(best_bid_price)}, value: {best_bid_price}")
             current_pos_value = short_pos_qty * best_bid_price
 
         # Logging the values before calculation
-        logging.info(f"For {symbol} Before adjustment: max_position_value: {max_position_value}, current_pos_value: {current_pos_value}")
+        logging.info(f"For [{symbol}] Before adjustment: max_position_value: {max_position_value}, current_pos_value: {current_pos_value}")
 
         adjusted_max_position_value = max_position_value - current_pos_value
         
         # Logging the result of the adjustment
-        logging.info(f"Adjusted max position value for {symbol}: {adjusted_max_position_value}")
+        logging.info(f"Adjusted max position value for [{symbol}]: {adjusted_max_position_value}")
 
         # Avoiding negative adjusted max position value
         adjusted_max_position_value = max(adjusted_max_position_value, 0)
         total_notional_amount = min(required_notional, adjusted_max_position_value)
 
-        logging.info(f"Calculated total notional amount for {symbol}: {total_notional_amount}")
+        logging.info(f"Calculated total notional amount for [{symbol}]: {total_notional_amount}")
         return total_notional_amount
 
     
@@ -13529,7 +13529,7 @@ class BybitStrategy(BaseStrategy):
                                                 strength: float, qty_precision: float, enforce_full_grid: bool,
                                                 long_pos_qty=0, short_pos_qty=0, side='buy') -> List[float]:
         # Logging the start of the calculation with details
-        logging.info(f"Calculating order amounts for {symbol} with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
+        logging.info(f"Calculating order amounts for [{symbol}] with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
 
         try:
             # Get the current price of the symbol
@@ -13560,7 +13560,7 @@ class BybitStrategy(BaseStrategy):
 
             # Return 0 if the adjusted total amount is negative
             if total_amount_adjusted < 0:
-                logging.info(f"Negative total_amount_adjusted for {symbol}: {total_amount_adjusted}. Side: {side}, total_amount: {total_amount}, current_position_qty: {current_position_qty}, current_price: {current_price}")
+                logging.info(f"Negative total_amount_adjusted for [{symbol}]: {total_amount_adjusted}. Side: {side}, total_amount: {total_amount}, current_position_qty: {current_position_qty}, current_price: {current_price}")
                 return 0  # Return 0 if no further orders should be issued
 
             # Log the types and values of important variables for debugging
@@ -13587,7 +13587,7 @@ class BybitStrategy(BaseStrategy):
                 amounts.append(rounded_quantity)
 
             # Log the calculated amounts for the symbol
-            logging.info(f"Calculated order amounts for {symbol}: {amounts}")
+            logging.info(f"Calculated order amounts for [{symbol}]: {amounts}")
             
             # If enforce_full_grid is True and all amounts are the same, adjust them to ensure variation
             if enforce_full_grid and len(set(amounts)) == 1:
@@ -13602,13 +13602,13 @@ class BybitStrategy(BaseStrategy):
         
         except Exception as e:
             # Log any exception that occurs during the calculation process
-            logging.info(f"Exception caught in calculate_order_amounts_notional_properdca for {symbol}: {e}")
+            logging.info(f"Exception caught in calculate_order_amounts_notional_properdca for [{symbol}]: {e}")
             return 0  # Return 0 if an exception occurs
         
     # def calculate_order_amounts_notional_properdca(self, symbol: str, total_amount: float, levels: int, 
     #                                                 strength: float, qty_precision: float, enforce_full_grid: bool,
     #                                                 long_pos_qty=0, short_pos_qty=0, side='buy') -> List[float]:
-    #     logging.info(f"Calculating order amounts for {symbol} with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
+    #     logging.info(f"Calculating order amounts for [{symbol}] with total_amount: {total_amount}, levels: {levels}, strength: {strength}, qty_precision: {qty_precision}, enforce_full_grid: {enforce_full_grid}")
         
     #     current_price = self.exchange.get_current_price(symbol)
     #     amounts = []
@@ -13642,7 +13642,7 @@ class BybitStrategy(BaseStrategy):
             
     #         amounts.append(rounded_quantity)
 
-    #     logging.info(f"Calculated order amounts for {symbol}: {amounts}")
+    #     logging.info(f"Calculated order amounts for [{symbol}]: {amounts}")
         
     #     # Adjust amounts if they are all the same when enforce_full_grid is True
     #     if enforce_full_grid and len(set(amounts)) == 1:
@@ -13666,14 +13666,14 @@ class BybitStrategy(BaseStrategy):
     def get_symbol_max_leverage(self, symbol):
         if symbol not in self.symbol_max_leverage:
             max_leverage = self.exchange.get_current_max_leverage_bybit(symbol)
-            logging.info(f"Max leverage for {symbol} {max_leverage}")
+            logging.info(f"Max leverage for [{symbol}] {max_leverage}")
             self.symbol_max_leverage[symbol] = max_leverage
-            logging.info(f"Fetched and stored max leverage for {symbol}: {max_leverage}x")
+            logging.info(f"Fetched and stored max leverage for [{symbol}]: {max_leverage}x")
         return self.symbol_max_leverage[symbol]
 
     def check_and_manage_positions(self, long_pos_qty, short_pos_qty, symbol, total_equity, current_price, wallet_exposure_limit_long, wallet_exposure_limit_short, max_qty_percent_long, max_qty_percent_short):
         try:
-            logging.info(f"Checking and managing positions for {symbol}")
+            logging.info(f"Checking and managing positions for [{symbol}]")
 
             # Calculate the maximum allowed positions based on the total equity and wallet exposure limits
             max_qty_long = (total_equity * wallet_exposure_limit_long) / current_price
@@ -13689,14 +13689,14 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"  [{symbol}]:- Short position exposure: {short_pos_exposure_percent:.2f}% of total equity")
 
             # Log detailed information about the configuration parameters and maximum allowed positions
-            logging.info(f"Configuration for {symbol}:")
+            logging.info(f"Configuration for [{symbol}]:")
             logging.info(f"  [{symbol}]:- Total equity: {total_equity:.2f} USD")
             logging.info(f"  [{symbol}]:- Current price: {current_price:.8f} USD")
             logging.info(f"  [{symbol}]:- Wallet exposure limit for long: {wallet_exposure_limit_long * 100:.2f}%")
             logging.info(f"  [{symbol}]:- Wallet exposure limit for short: {wallet_exposure_limit_short * 100:.2f}%")
             logging.info(f"  [{symbol}]:- Max quantity percentage for long: {max_qty_percent_long}%")
             logging.info(f"  [{symbol}]:- Max quantity percentage for short: {max_qty_percent_short}%")
-            logging.info(f"Maximum allowed positions for {symbol}:")
+            logging.info(f"Maximum allowed positions for [{symbol}]:")
             logging.info(f"  [{symbol}]:- Max quantity for long: {max_qty_long:.4f} units")
             logging.info(f"  [{symbol}]:- Max quantity for short: {max_qty_short:.4f} units")
             logging.info(f"[{symbol}]:- Long position quantity: {long_pos_qty}")
@@ -13832,7 +13832,7 @@ class BybitStrategy(BaseStrategy):
     
     def print_order_book_imbalance(self, symbol):
         imbalance = self.get_order_book_imbalance(symbol)
-        print(f"Order Book Imbalance for {symbol}: {imbalance}")
+        print(f"Order Book Imbalance for [{symbol}]: {imbalance}")
 
     def log_order_book_walls(self, symbol, interval_in_seconds):
         """
@@ -13884,7 +13884,7 @@ class BybitStrategy(BaseStrategy):
 
     def bybit_turbocharged_entry_maker_walls(self, symbol, trend, mfi, one_minute_volume, five_minute_distance, min_vol, min_dist, take_profit_long, take_profit_short, long_dynamic_amount, short_dynamic_amount, long_pos_qty, short_pos_qty, long_pos_price, short_pos_price):
         if one_minute_volume is None or five_minute_distance is None or one_minute_volume <= min_vol or five_minute_distance <= min_dist:
-            logging.warning(f"Either 'one_minute_volume' or 'five_minute_distance' does not meet the criteria for symbol {symbol}. Skipping current execution...")
+            logging.warning(f"Either 'one_minute_volume' or 'five_minute_distance' does not meet the criteria for symbol [{symbol}]. Skipping current execution...")
             return
 
         order_book = self.exchange.get_orderbook(symbol)
@@ -13937,7 +13937,7 @@ class BybitStrategy(BaseStrategy):
     def bybit_turbocharged_entry_maker(self, open_orders, symbol, trend, mfi, one_minute_volume: float, five_minute_distance: float, min_vol, min_dist, take_profit_long, take_profit_short, long_dynamic_amount, short_dynamic_amount, long_pos_qty, short_pos_qty, long_pos_price, short_pos_price, should_long, should_add_to_long, should_short, should_add_to_short):
 
         if not (one_minute_volume and five_minute_distance) or one_minute_volume <= min_vol or five_minute_distance <= min_dist:
-            logging.warning(f"Either 'one_minute_volume' or 'five_minute_distance' does not meet the criteria for symbol {symbol}. Skipping current execution...")
+            logging.warning(f"Either 'one_minute_volume' or 'five_minute_distance' does not meet the criteria for symbol [{symbol}]. Skipping current execution...")
             return
 
         current_price = self.exchange.get_current_price(symbol)
@@ -13957,29 +13957,29 @@ class BybitStrategy(BaseStrategy):
         short_dynamic_amount += max((best_ask_price - take_profit_short) if take_profit_short else 0, min_qty)
 
         if not trend or not mfi:
-            logging.warning(f"Either 'trend' or 'mfi' is None for symbol {symbol}. Skipping current execution...")
+            logging.warning(f"Either 'trend' or 'mfi' is None for symbol [{symbol}]. Skipping current execution...")
             return
 
         if trend.lower() == "long" and mfi.lower() == "long":
             if long_pos_qty == 0 and should_long and not self.entry_order_exists(open_orders, "buy"):
                 self.postonly_limit_order_bybit(symbol, "buy", long_dynamic_amount, front_run_bid_price, positionIdx=1, reduceOnly=False)
-                logging.info(f"Turbocharged Long Entry Placed at {front_run_bid_price} for {symbol} with {long_dynamic_amount} amount!")
+                logging.info(f"Turbocharged Long Entry Placed at {front_run_bid_price} for [{symbol}] with {long_dynamic_amount} amount!")
             elif should_add_to_long and long_pos_qty > 0 and long_pos_qty < self.max_long_trade_qty_per_symbol[symbol] and best_bid_price < long_pos_price and not self.entry_order_exists(open_orders, "buy"):
                 self.postonly_limit_order_bybit(symbol, "buy", long_dynamic_amount, front_run_bid_price, positionIdx=1, reduceOnly=False)
-                logging.info(f"Turbocharged Additional Long Entry Placed at {front_run_bid_price} for {symbol} with {long_dynamic_amount} amount!")
+                logging.info(f"Turbocharged Additional Long Entry Placed at {front_run_bid_price} for [{symbol}] with {long_dynamic_amount} amount!")
 
         elif trend.lower() == "short" and mfi.lower() == "short":
             if short_pos_qty == 0 and should_short and not self.entry_order_exists(open_orders, "sell"):
                 self.postonly_limit_order_bybit(symbol, "sell", short_dynamic_amount, front_run_ask_price, positionIdx=2, reduceOnly=False)
-                logging.info(f"Turbocharged Short Entry Placed at {front_run_ask_price} for {symbol} with {short_dynamic_amount} amount!")
+                logging.info(f"Turbocharged Short Entry Placed at {front_run_ask_price} for [{symbol}] with {short_dynamic_amount} amount!")
             elif should_add_to_short and short_pos_qty > 0 and short_pos_qty < self.max_short_trade_qty_per_symbol[symbol] and best_ask_price > short_pos_price and not self.entry_order_exists(open_orders, "sell"):
                 self.postonly_limit_order_bybit(symbol, "sell", short_dynamic_amount, front_run_ask_price, positionIdx=2, reduceOnly=False)
-                logging.info(f"Turbocharged Additional Short Entry Placed at {front_run_ask_price} for {symbol} with {short_dynamic_amount} amount!")
+                logging.info(f"Turbocharged Additional Short Entry Placed at {front_run_ask_price} for [{symbol}] with {short_dynamic_amount} amount!")
 
     def bybit_hedge_initial_entry_maker_hma(self, open_orders: list, symbol: str, trend: str, hma_trend: str, mfi: str, one_minute_volume: float, five_minute_distance: float, min_vol: float, min_dist: float, long_dynamic_amount: float, short_dynamic_amount: float, long_pos_qty: float, short_pos_qty: float, should_long: bool, should_short: bool):
 
         if trend is None or mfi is None or hma_trend is None:
-            logging.warning(f"Either 'trend', 'mfi', or 'hma_trend' is None for symbol {symbol}. Skipping current execution...")
+            logging.warning(f"Either 'trend', 'mfi', or 'hma_trend' is None for symbol [{symbol}]. Skipping current execution...")
             return
 
         if one_minute_volume is not None and five_minute_distance is not None:
