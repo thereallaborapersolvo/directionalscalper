@@ -39,7 +39,7 @@
             "grid_behavior": "infinite",
             "drawdown_behavior": "maxqtypercent",
             "target_coins_mode": false,
-            "auto_graceful_stop": true,
+            "auto_graceful_stop": false,
             "entry_signal_type": "lorentzian",
             "additional_entries_from_signal": true,
             "graceful_stop_long": false,
@@ -49,7 +49,7 @@
             "auto_reduce_cooldown_enabled": false,
             "auto_reduce_cooldown_start_pct": 0.051,
             "wallet_exposure_limit_long": 0.006,
-            "wallet_exposure_limit_short": 0.002,
+            "wallet_exposure_limit_short": 0.001,
             "levels": 4,
             "strength": 1.4,
             "outer_price_distance": 0.059,
@@ -70,7 +70,10 @@
             "failsafe_enabled": false,
             "failsafe_start_pct": 0.07,
             "long_failsafe_upnl_pct": 10.0,
-            "short_failsafe_upnl_pct": 10.0
+            "short_failsafe_upnl_pct": 10.0,
+            "stop_loss_enabled": true,
+            "stop_loss_long": 15.0,
+            "stop_loss_short": 15.0
         },
         "hotkeys": {
             "hotkeys_enabled": false,
@@ -92,7 +95,7 @@
             "symbols_allowed": 5
         },
         {
-            "name": "bybit_unified",
+            "name": "bybit",
             "account_name": "account_3",
             "symbols_allowed": 5
         }

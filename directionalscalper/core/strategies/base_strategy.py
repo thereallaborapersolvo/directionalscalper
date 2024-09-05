@@ -166,13 +166,20 @@ class BaseStrategy:
         self.max_trade_qty_per_symbol = {}
         self.last_auto_reduce_time = {}
         self.rate_limiter = RateLimit(10, 1)
+        self.general_rate_limiter = RateLimit(50, 1)
+        self.order_rate_limiter = RateLimit(5, 1) 
+        self.last_known_mas = {}
 
         # self.bybit = self.Bybit(self)
 
-    def dbscan_classification(ohlcv_data, zigzag_length, epsilon_deviation, aggregate_range):
+    def dbscan_classification(self, ohlcv_data, zigzag_length, epsilon_deviation, aggregate_range):
+        logging.info(f"Starting dbscan_classification with zigzag_length={zigzag_length}, epsilon_deviation={epsilon_deviation}, aggregate_range={aggregate_range}")
+
         # Extract highs and lows from the OHLCV data
         highs = np.array([candle['high'] for candle in ohlcv_data])
         lows = np.array([candle['low'] for candle in ohlcv_data])
+        logging.info(f"Extracted highs: {highs}, lows: {lows}")
+
         peaks_and_troughs = []
 
         direction_up = False
@@ -183,51 +190,74 @@ class BaseStrategy:
         for i in range(zigzag_length, len(ohlcv_data) - zigzag_length):
             h = np.max(highs[i - zigzag_length:i + zigzag_length + 1])
             l = np.min(lows[i - zigzag_length:i + zigzag_length + 1])
+            logging.info(f"Evaluating at index {i}: high={h}, low={l}, direction_up={direction_up}")
 
+            # Try a smaller zigzag_length
+            zigzag_length = max(1, zigzag_length // 2)
+
+            # Or adjust conditions in the loop
             if direction_up:
-                if l == ohlcv_data[i]['low'] and ohlcv_data[i]['low'] < last_low:
-                    last_low = ohlcv_data[i]['low']
+                if l < last_low:  # Less strict than 'l == ohlcv_data[i]['low']'
+                    last_low = l
                     peaks_and_troughs.append(last_low)
-                if h == ohlcv_data[i]['high'] and ohlcv_data[i]['high'] > last_low:
-                    last_high = ohlcv_data[i]['high']
+                if h > last_high:  # Less strict than 'h == ohlcv_data[i]['high']'
+                    last_high = h
                     direction_up = False
                     peaks_and_troughs.append(last_high)
             else:
-                if h == ohlcv_data[i]['high'] and ohlcv_data[i]['high'] > last_high:
-                    last_high = ohlcv_data[i]['high']
+                if h > last_high:
+                    last_high = h
                     peaks_and_troughs.append(last_high)
-                if l == ohlcv_data[i]['low'] and ohlcv_data[i]['low'] < last_high:
-                    last_low = ohlcv_data[i]['low']
+                if l < last_low:
+                    last_low = l
                     direction_up = True
                     peaks_and_troughs.append(last_low)
 
-        # Normalize the peaks and troughs
+        # Convert peaks_and_troughs to a numpy array
         zigzag = np.array(peaks_and_troughs)
+        logging.info(f"Generated zigzag array: {zigzag}")
+
+        # Check if zigzag array is empty
+        if zigzag.size == 0:
+            logging.info("Zigzag array is empty. No peaks or troughs detected.")
+            return []
+
+        # Normalize the peaks and troughs
         min_price = np.min(zigzag)
         max_price = np.max(zigzag)
+        logging.info(f"Zigzag min_price: {min_price}, max_price: {max_price}")
+
         normalized_zigzag = (zigzag - min_price) / (max_price - min_price)
+        logging.info(f"Normalized zigzag array: {normalized_zigzag}")
 
         # Calculate the mean deviation
         mean = np.mean(normalized_zigzag)
         deviation = np.mean(np.abs(normalized_zigzag - mean))
+        logging.info(f"Calculated mean: {mean}, deviation: {deviation}")
 
         # Define the epsilon value for DBSCAN
         epsilon = (deviation * epsilon_deviation) / 100.0
+        logging.info(f"Calculated epsilon for DBSCAN: {epsilon}")
 
         # Prepare data points for DBSCAN
         data_points = normalized_zigzag.reshape(-1, 1)
+        logging.info(f"Data points prepared for DBSCAN: {data_points}")
 
         # Run DBSCAN clustering
         dbscan = DBSCAN(eps=epsilon, min_samples=1, metric='euclidean')
         dbscan.fit(data_points)
+        logging.info(f"DBSCAN labels: {dbscan.labels_}")
 
         # Extract clusters and noise
         clusters = []
         for label in set(dbscan.labels_):
             if label != -1:  # -1 means noise
-                clusters.append([i for i, l in enumerate(dbscan.labels_) if l == label])
+                cluster = [i for i, l in enumerate(dbscan.labels_) if l == label]
+                clusters.append(cluster)
+                logging.info(f"Detected cluster with label {label}: {cluster}")
 
         noise = [i for i, l in enumerate(dbscan.labels_) if l == -1]
+        logging.info(f"Detected noise points: {noise}")
 
         # Aggregate and filter clusters into significant levels
         support_resistance_levels = []
@@ -242,6 +272,7 @@ class BaseStrategy:
                 'strength': strength,
                 'average_volume': average_volume
             })
+            logging.info(f"Added support/resistance level: {median_price}, strength: {strength}, average volume: {average_volume}")
 
         # Add significant noise levels
         max_level = np.max([level['level'] for level in support_resistance_levels])
@@ -256,15 +287,18 @@ class BaseStrategy:
                     'strength': 1,
                     'average_volume': noise_volume
                 })
+                logging.info(f"Added significant noise level above max level: {noise_level}")
             elif noise_level < min_level and (min_level - noise_level) / min_level > aggregate_range / 100.0:
                 support_resistance_levels.append({
                     'level': noise_level,
                     'strength': 1,
                     'average_volume': noise_volume
                 })
+                logging.info(f"Added significant noise level below min level: {noise_level}")
 
         # Sort the levels by price level in descending order
         support_resistance_levels.sort(key=lambda x: x['level'], reverse=True)
+        logging.info(f"Sorted support/resistance levels: {support_resistance_levels}")
 
         # Filter out closely grouped levels
         filtered_levels = []
@@ -281,6 +315,7 @@ class BaseStrategy:
             current_group.sort(key=lambda x: x['average_volume'], reverse=True)
             filtered_levels.append(current_group[0])
             i = j
+            logging.info(f"Filtered level added: {current_group[0]}")
 
         # Finalize the levels by removing close duplicates
         final_levels = []
@@ -288,15 +323,18 @@ class BaseStrategy:
             if len(final_levels) == 0 or \
                     abs(filtered_levels[k]['level'] - final_levels[-1]['level']) / final_levels[-1]['level'] > aggregate_range / 100.0:
                 final_levels.append(filtered_levels[k])
+                logging.info(f"Final level added: {filtered_levels[k]}")
             else:
                 for m in range(k + 1, len(filtered_levels)):
                     if abs(filtered_levels[m]['level'] - final_levels[-1]['level']) / final_levels[-1]['level'] > aggregate_range / 100.0:
                         final_levels.append(filtered_levels[m])
                         k = m
+                        logging.info(f"Final level added after checking close duplicates: {filtered_levels[m]}")
                         break
 
         # Sort final levels in descending order
         final_levels.sort(key=lambda x: x['level'], reverse=True)
+        logging.info(f"Final sorted levels: {final_levels}")
 
         return final_levels
 
@@ -435,28 +473,34 @@ class BaseStrategy:
         ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        
+        # Convert columns to numeric
+        df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].apply(pd.to_numeric, errors='coerce')
+
+        # Validate data
+        if df[['open', 'high', 'low', 'close', 'volume']].isnull().any().any():
+            logging.warning(f"Invalid data detected for {symbol} on timeframe {timeframe}. Data:\n{df}")
+            # Handle invalid data here (e.g., skip the symbol, raise an error, etc.)
+
         return df
 
     def calculate_atr(self, df, period=14):
+        # Drop rows with NaN values in 'high', 'low', or 'close' columns
+        df = df.dropna(subset=['high', 'low', 'close'])
+
+        # Check again if there are enough data points after dropping NaNs
+        if len(df) < period:
+            return None  # Not enough data points
+
         high_low = df['high'] - df['low']
         high_close = np.abs(df['high'] - df['close'].shift())
         low_close = np.abs(df['low'] - df['close'].shift())
         tr = np.max([high_low, high_close, low_close], axis=0)
-        
-        if len(tr) < period:
-            return None  # Return None if there are not enough data points
-        
-        atr = np.nanmean(tr[-period:])  # Use np.nanmean to handle NaNs
+
+        # Calculate the ATR using np.nanmean to ignore any remaining NaNs
+        atr = np.nanmean(tr[-period:])
+
         return atr if not np.isnan(atr) else None  # Return None if the result is NaN
-
-    # def calculate_atr(self, df, period=14):
-    #     high_low = df['high'] - df['low']
-    #     high_close = np.abs(df['high'] - df['close'].shift())
-    #     low_close = np.abs(df['low'] - df['close'].shift())
-    #     tr = np.max([high_low, high_close, low_close], axis=0)
-    #     atr = np.mean(tr[-period:])
-    #     return atr
-
 
     def initialize_trade_quantities(self, symbol, total_equity, best_ask_price, max_leverage):
         if symbol in self.initialized_symbols:
@@ -475,32 +519,46 @@ class BaseStrategy:
         self.initialized_symbols.add(symbol)
 
     def get_all_moving_averages(self, symbol, max_retries=3, delay=5):
-        for _ in range(max_retries):
-            m_moving_averages = self.manager.get_1m_moving_averages(symbol)
-            m5_moving_averages = self.manager.get_5m_moving_averages(symbol)
+        with self.general_rate_limiter:
+            for _ in range(max_retries):
+                try:
+                    m_moving_averages = self.manager.get_1m_moving_averages(symbol)
+                    m5_moving_averages = self.manager.get_5m_moving_averages(symbol)
 
-            ma_6_high = m_moving_averages["MA_6_H"]
-            ma_6_low = m_moving_averages["MA_6_L"]
-            ma_3_low = m_moving_averages["MA_3_L"]
-            ma_3_high = m_moving_averages["MA_3_H"]
-            ma_1m_3_high = self.manager.get_1m_moving_averages(symbol)["MA_3_H"]
-            ma_5m_3_high = self.manager.get_5m_moving_averages(symbol)["MA_3_H"]
+                    ma_6_high = m_moving_averages.get("MA_6_H")
+                    ma_6_low = m_moving_averages.get("MA_6_L")
+                    ma_3_low = m_moving_averages.get("MA_3_L")
+                    ma_3_high = m_moving_averages.get("MA_3_H")
+                    ma_1m_3_high = m_moving_averages.get("MA_3_H")
+                    ma_5m_3_high = m5_moving_averages.get("MA_3_H")
 
-            # Check if the data is correct
-            if all(isinstance(value, (float, int, np.number)) for value in [ma_6_high, ma_6_low, ma_3_low, ma_3_high, ma_1m_3_high, ma_5m_3_high]):
-                return {
-                    "ma_6_high": ma_6_high,
-                    "ma_6_low": ma_6_low,
-                    "ma_3_low": ma_3_low,
-                    "ma_3_high": ma_3_high,
-                    "ma_1m_3_high": ma_1m_3_high,
-                    "ma_5m_3_high": ma_5m_3_high,
-                }
+                    # Check if the data is correct
+                    if all(isinstance(value, (float, int, np.number)) for value in [ma_6_high, ma_6_low, ma_3_low, ma_3_high, ma_1m_3_high, ma_5m_3_high]):
+                        self.last_known_mas[symbol] = {
+                            "ma_6_high": ma_6_high,
+                            "ma_6_low": ma_6_low,
+                            "ma_3_low": ma_3_low,
+                            "ma_3_high": ma_3_high,
+                            "ma_1m_3_high": ma_1m_3_high,
+                            "ma_5m_3_high": ma_5m_3_high,
+                        }
+                        return self.last_known_mas[symbol]
 
-            # If the data is not correct, wait for a short delay
-            time.sleep(delay)
+                    logging.warning(f"Invalid moving averages for {symbol}: {m_moving_averages}, {m5_moving_averages}. Retrying...")
 
-        raise ValueError("Failed to fetch valid moving averages after multiple attempts.")
+                except Exception as e:
+                    logging.error(f"Error fetching moving averages for {symbol}: {e}. Retrying...")
+
+                # If the data is not correct, wait for a short delay
+                time.sleep(delay)
+
+            # If retries are exhausted, use the last known values
+            if symbol in self.last_known_mas:
+                logging.info(f"Using last known moving averages for {symbol}.")
+                return self.last_known_mas[symbol]
+            else:
+                raise ValueError(f"Failed to fetch valid moving averages for {symbol} after multiple attempts and no fallback available.")
+
 
     def get_current_price(self, symbol):
         return self.exchange.get_current_price(symbol)
