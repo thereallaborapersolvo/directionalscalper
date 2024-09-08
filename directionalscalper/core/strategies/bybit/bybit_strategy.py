@@ -3304,6 +3304,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_orderbook_maxposqty_properdca'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -3666,6 +3667,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_orderbook_maxposqty_nosignal_properdca'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -3967,6 +3969,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_ob_volumelevels_nosignal'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -4334,6 +4337,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_ob_volumes_nosignal'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -4777,6 +4781,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'lingrid_oblevels'")
 
             if self.auto_reduce_active_long.get(symbol, False):
                 self.clear_grid(symbol, 'buy')
@@ -6177,6 +6182,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'lingrid_uponsignal_v2'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -6656,6 +6662,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'lingrid_ob_lsignal_entryuponsignal'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -7232,6 +7239,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_ob_volumelevels_dynamictp_lsignal'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -7651,6 +7659,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_ob_volumelevels_dynamictp'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -7972,6 +7981,7 @@ class BybitStrategy(BaseStrategy):
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
+            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'linear_grid_hardened_gridspan_ob_volumes'")
             logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
             logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
 
@@ -13546,64 +13556,84 @@ class BybitStrategy(BaseStrategy):
             base_notional = total_amount
 
             # Retrieve the minimum quantity for the symbol
-            min_qty = self.get_min_qty(symbol)  # Retrieve the min_qty for the symbol
+            min_qty = self.get_min_qty(symbol)
 
             # Determine the current position quantity based on the side (long or short)
-            if side == 'buy':
-                current_position_qty = long_pos_qty
-            else:
-                current_position_qty = short_pos_qty
+            current_position_qty = long_pos_qty if side == 'buy' else short_pos_qty
 
             # Adjust the total amount based on the current position
             total_amount_adjusted = total_amount + (current_position_qty * current_price)
-            logging.info(f"Total amount adjusted for current position: {total_amount_adjusted}")
+            logging.info(f"[{symbol}] Total amount adjusted for current {side} position : {total_amount_adjusted}")
 
             # Return 0 if the adjusted total amount is negative
             if total_amount_adjusted < 0:
                 logging.info(f"Negative total_amount_adjusted for [{symbol}]: {total_amount_adjusted}. Side: {side}, total_amount: {total_amount}, current_position_qty: {current_position_qty}, current_price: {current_price}")
-                return 0  # Return 0 if no further orders should be issued
+                return [0] * levels  # Return zeroes if no further orders should be issued
 
             # Log the types and values of important variables for debugging
             logging.info(f"Type of total_amount: {type(total_amount)}, Value: {total_amount}")
             logging.info(f"Type of current_price: {type(current_price)}, Value: {current_price}")
             logging.info(f"Type of min_qty: {type(min_qty)}, Value: {min_qty}")
 
-            # Loop through the levels to calculate the order amounts
+            # First pass: Calculate initial quantities
             for i in range(levels):
                 # Calculate the notional amount for the current level
                 notional_amount = (level_notional[i] / total_ratio) * total_amount_adjusted
                 # Calculate the quantity for the current level
                 quantity = notional_amount / current_price
-                logging.info(f"Level {i+1} - Initial quantity: {quantity}")
-                
-                # Determine the minimum quantity to use (either min_notional or min_qty)
-                min_quantity = max(base_notional / current_price, min_qty)
-                
-                # Apply the minimum quantity requirement and round the quantity
-                rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_quantity)
-                logging.info(f"Level {i+1} - Rounded quantity: {rounded_quantity}")
-                
-                # Append the calculated quantity to the amounts list
-                amounts.append(rounded_quantity)
+                amounts.append(quantity)
+                logging.info(f"[{symbol}] Level {i+1} - Initial quantity: {quantity}")
 
-            # Log the calculated amounts for the symbol
-            logging.info(f"Calculated order amounts for [{symbol}]: {amounts}")
-            
-            # If enforce_full_grid is True and all amounts are the same, adjust them to ensure variation
+            # Second pass: Round quantities to respect min_qty
+            total_rounded = 0
+            for i in range(levels):
+                rounded_quantity = max(min_qty, round(amounts[i] / min_qty) * min_qty)
+                amounts[i] = rounded_quantity
+                total_rounded += rounded_quantity
+                logging.info(f"[{symbol}] Level {i+1} - Rounded quantity: {rounded_quantity}")
+
+            # Third pass: Adjust for any rounding discrepancies
+            total_qty = total_amount_adjusted / current_price
+            discrepancy = total_qty - total_rounded
+            if discrepancy > 0:
+                # Distribute excess quantity
+                while discrepancy >= min_qty:
+                    for i in range(levels):
+                        if discrepancy >= min_qty:
+                            amounts[i] += min_qty
+                            discrepancy -= min_qty
+                        else:
+                            break
+            elif discrepancy < 0:
+                # Remove excess quantity
+                while discrepancy <= -min_qty:
+                    for i in range(levels-1, -1, -1):
+                        if discrepancy <= -min_qty and amounts[i] > min_qty:
+                            amounts[i] -= min_qty
+                            discrepancy += min_qty
+                        else:
+                            break
+
+            # Adjust amounts if they are all the same when enforce_full_grid is True
             if enforce_full_grid and len(set(amounts)) == 1:
                 logging.info("Adjusting amounts to ensure variation in enforce_full_grid mode")
-                increment = qty_precision
+                increment = min_qty
                 for i in range(1, levels):
-                    amounts[i] += increment
-                    increment += qty_precision
+                    if amounts[i] + increment <= amounts[0] + (levels - 1) * min_qty:
+                        amounts[i] += increment
+                        increment += min_qty
+
+            # Log the calculated amounts for the symbol
+            logging.info(f"Calculated order amounts for [{symbol}] with side {side}: {amounts}")
 
             # Return the final calculated amounts
             return amounts
-        
+
         except Exception as e:
             # Log any exception that occurs during the calculation process
             logging.info(f"Exception caught in calculate_order_amounts_notional_properdca for [{symbol}]: {e}")
-            return 0  # Return 0 if an exception occurs
+            return [0] * levels  # Return zeroes if an exception occurs
+
         
     # def calculate_order_amounts_notional_properdca(self, symbol: str, total_amount: float, levels: int, 
     #                                                 strength: float, qty_precision: float, enforce_full_grid: bool,

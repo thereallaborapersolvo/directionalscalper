@@ -199,7 +199,7 @@ class DirectionalMarketMaker:
             self.exchange = exchange_class(api_key, secret_key, passphrase)
 
     def run_strategy(self, symbol, strategy_name, config, account_name, symbols_to_trade=None, rotator_symbols_standardized=None, mfirsi_signal=None, action=None):
-        logging.info(f"Received rotator symbols in run_strategy for {symbol}: {rotator_symbols_standardized}")
+        logging.info(f"Received rotator symbols in run_strategy ({strategy_name}) for {symbol}: {rotator_symbols_standardized}")
         
         symbols_allowed = next((exch.symbols_allowed for exch in config.exchanges if exch.name == self.exchange_name and exch.account_name == account_name), None)
 
