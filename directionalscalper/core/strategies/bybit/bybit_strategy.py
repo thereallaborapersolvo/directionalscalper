@@ -630,8 +630,11 @@ class BybitStrategy(BaseStrategy):
             except Exception as e:
                 logging.info(f"Error in cancelling {order_side} TP order {order['id']}. Error: {e}")
 
-        # Using datetime.now() for checking if update is needed
+        # Debug log to inspect the current time and last TP update time
         now = datetime.now()
+        logging.info(f"Inside update_quickscalp_tp_dynamic - Current time: {now}, TP update time before adjustment: {last_tp_update}")
+
+        # Check if an update is needed based on the current time or if there were mismatched quantity orders
         if now >= last_tp_update or mismatched_qty_orders:
             # Check if a TP order already exists
             tp_order_exists = (order_side == "sell" and long_tp_count > 0) or (order_side == "buy" and short_tp_count > 0)
