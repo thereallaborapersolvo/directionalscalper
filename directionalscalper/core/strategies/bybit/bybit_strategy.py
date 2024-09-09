@@ -739,6 +739,7 @@ class BybitStrategy(BaseStrategy):
 
     def calculate_quickscalp_long_take_profit_dynamic_distance(self, long_pos_price, symbol, min_upnl_profit_pct, max_upnl_profit_pct):
         if long_pos_price is None or long_pos_price <= 0:
+            logging.info(f"Invalid long position price for {symbol}: {long_pos_price}")
             return None, None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
@@ -748,6 +749,9 @@ class BybitStrategy(BaseStrategy):
         min_target_profit_price = Decimal(long_pos_price) * (1 + Decimal(min_upnl_profit_pct))
         max_target_profit_price = Decimal(long_pos_price) * (1 + Decimal(max_upnl_profit_pct))
 
+        # Log the raw calculated target profit prices before quantization
+        logging.info(f"Calculated raw TP values for {symbol} - Min TP: {min_target_profit_price}, Max TP: {max_target_profit_price}")
+
         # Quantize the target profit prices
         try:
             min_target_profit_price = min_target_profit_price.quantize(
@@ -757,14 +761,18 @@ class BybitStrategy(BaseStrategy):
                 Decimal('1e-{}'.format(price_precision)), rounding=ROUND_HALF_UP
             )
         except InvalidOperation as e:
-            logging.info(f"Error when quantizing target_profit_prices. {e}")
+            logging.info(f"Error when quantizing target_profit_prices for {symbol}. {e}")
             return None, None
+
+        # Log the quantized TP values before returning
+        logging.info(f"Quantized TP values for {symbol} - Min TP: {float(min_target_profit_price)}, Max TP: {float(max_target_profit_price)}")
 
         # Return the minimum and maximum target profit prices as a tuple
         return float(min_target_profit_price), float(max_target_profit_price)
 
     def calculate_quickscalp_short_take_profit_dynamic_distance(self, short_pos_price, symbol, min_upnl_profit_pct, max_upnl_profit_pct):
         if short_pos_price is None or short_pos_price <= 0:
+            logging.info(f"Invalid short position price for {symbol}: {short_pos_price}")
             return None, None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
@@ -774,6 +782,9 @@ class BybitStrategy(BaseStrategy):
         min_target_profit_price = Decimal(short_pos_price) * (1 - Decimal(min_upnl_profit_pct))
         max_target_profit_price = Decimal(short_pos_price) * (1 - Decimal(max_upnl_profit_pct))
 
+        # Log the raw calculated target profit prices before quantization
+        logging.info(f"Calculated raw TP values for {symbol} - Min TP: {min_target_profit_price}, Max TP: {max_target_profit_price}")
+
         # Quantize the target profit prices
         try:
             min_target_profit_price = min_target_profit_price.quantize(
@@ -783,8 +794,11 @@ class BybitStrategy(BaseStrategy):
                 Decimal('1e-{}'.format(price_precision)), rounding=ROUND_HALF_UP
             )
         except InvalidOperation as e:
-            logging.info(f"Error when quantizing target_profit_prices. {e}")
+            logging.info(f"Error when quantizing target_profit_prices for {symbol}. {e}")
             return None, None
+
+        # Log the quantized TP values before returning
+        logging.info(f"Quantized TP values for {symbol} - Min TP: {float(min_target_profit_price)}, Max TP: {float(max_target_profit_price)}")
 
         # Return the minimum and maximum target profit prices as a tuple
         return float(min_target_profit_price), float(max_target_profit_price)
