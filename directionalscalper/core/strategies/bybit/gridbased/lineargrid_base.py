@@ -631,8 +631,9 @@ class LinearGridBaseFutures(BybitStrategy):
                     long_take_profit = None
 
                     # Calculate take profit for short and long positions using quickscalp method
-                    short_take_profit = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
-                    long_take_profit = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
+                    # short_take_profit = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
+                    # long_take_profit = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
+                    # labper - Removed above as those are potentially duplicates
 
                     short_stop_loss = None
                     long_stop_loss = None
@@ -776,8 +777,8 @@ class LinearGridBaseFutures(BybitStrategy):
                     previous_one_minute_distance = one_minute_distance
 
 
-                    logging.info(f"Short take profit for {symbol}: {short_take_profit}")
-                    logging.info(f"Long take profit for {symbol}: {long_take_profit}")
+                    # logging.info(f"Short take profit for {symbol}: {short_take_profit}")
+                    # logging.info(f"Long take profit for {symbol}: {long_take_profit}")
 
                     # Handling best ask price with fallback and type conversion
                     if 'asks' in order_book and len(order_book['asks']) > 0:
@@ -899,6 +900,9 @@ class LinearGridBaseFutures(BybitStrategy):
                     except Exception as e:
                         logging.info(f"Something is up with variables for the grid {e}")
 
+                    # Calculate take profit for short and long positions using quickscalp method
+                    short_take_profit = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
+                    long_take_profit = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
 
                     logging.info(f"Long tp counts: {long_tp_counts}")
                     logging.info(f"Short tp counts: {short_tp_counts}")
@@ -917,9 +921,9 @@ class LinearGridBaseFutures(BybitStrategy):
                     logging.info(f"Next long TP update time: {self.next_long_tp_update}")
                     logging.info(f"Next short TP update time: {self.next_short_tp_update}")
 
-                    # Calculate take profit for short and long positions using quickscalp method
-                    short_take_profit = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
-                    long_take_profit = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
+
+                    # Before calling update_quickscalp_tp_dynamic
+                    logging.info(f"Before updating TP - Current time: {datetime.now()}, Next long TP update: {self.next_long_tp_update}, Next short TP update: {self.next_short_tp_update}")
 
                     # Update TP for long position
                     if long_pos_qty > 0:
@@ -940,6 +944,7 @@ class LinearGridBaseFutures(BybitStrategy):
                                 tp_order_counts=tp_order_counts,
                                 open_orders=open_orders
                             )
+                            logging.info(f"Updated long TP time: {self.next_long_tp_update}")
 
                     if short_pos_qty > 0:
                         new_short_tp_min, new_short_tp_max = self.calculate_quickscalp_short_take_profit_dynamic_distance(
@@ -959,7 +964,7 @@ class LinearGridBaseFutures(BybitStrategy):
                                 tp_order_counts=tp_order_counts,
                                 open_orders=open_orders
                             )
-                            
+                            logging.info(f"Updated short TP time: {self.next_short_tp_update}")
 
                     if self.test_orders_enabled and current_time - self.last_helper_order_cancel_time >= self.helper_interval:
                         if symbol in open_symbols:
