@@ -246,6 +246,7 @@ class BybitExchange(Exchange):
                     price=price,
                     params={**params, 'positionIdx': positionIdx}  # Pass the 'positionIdx' parameter here
                 )
+                logging.info(f"Exchange Response: {order}")
                 return order
             else:
                 logging.info(f"side {side} does not exist")
@@ -992,7 +993,7 @@ class BybitExchange(Exchange):
             raise ValueError(f"Unsupported order type: {order_type}")
         
     def create_normal_take_profit_order_bybit(self, symbol, order_type, side, amount, price=None, positionIdx=1, reduce_only=True):
-        logging.info(f"Calling create_take_profit_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
+        logging.info(f"Calling create_normal_take_profit_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
         if order_type == 'limit':
             if price is None:
                 raise ValueError("A price must be specified for a limit order")
