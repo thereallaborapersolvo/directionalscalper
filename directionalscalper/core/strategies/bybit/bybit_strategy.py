@@ -674,8 +674,16 @@ class BybitStrategy(BaseStrategy):
             else:
                 logging.info(f"Skipping TP update as a TP order already exists for [{symbol}]")
 
-            # Calculate and return the next update time
-            return self.calculate_next_update_time()
+            # Ensure the next TP update time is set to the future
+            if order_side == "sell":
+                self.next_long_tp_update = now + timedelta(seconds=15)  # Adjust time as per strategy needs
+                logging.info(f"Updated long TP time: {self.next_long_tp_update}")
+            else:
+                self.next_short_tp_update = now + timedelta(seconds=15)  # Adjust time as per strategy needs
+                logging.info(f"Updated short TP time: {self.next_short_tp_update}")
+
+            # Return the appropriate updated time
+            return self.next_long_tp_update if order_side == "sell" else self.next_short_tp_update
         else:
             logging.info(f"No immediate update needed for TP orders for [{symbol}]. Last update at: {last_tp_update}")
             return last_tp_update
@@ -13263,7 +13271,8 @@ class BybitStrategy(BaseStrategy):
 
             orders_canceled = 0
             for order in open_orders:
-                if order['side'].lower() == side.lower():
+                # Check if the order side matches and it's not a reduceOnly order
+                if order['side'].lower() == side.lower() and not order.get('reduceOnly', False):
                     self.exchange.cancel_order_by_id(order['id'], symbol)
                     orders_canceled += 1
                     logging.info(f"Canceled order {order['id']} for [{symbol}]")
@@ -13282,8 +13291,8 @@ class BybitStrategy(BaseStrategy):
                 logging.info(f"Removed [{symbol}] from active short grids")
 
         except Exception as e:
-            logging.error(f"Exception in cancel_grid_orders for [{symbol}] - {side}: {e}")
-            logging.error("Traceback: %s", traceback.format_exc())
+            logging.error(f"An error occurred while canceling grid orders: {e}")
+
 
     def calculate_total_amount(self, symbol: str, total_equity: float, best_ask_price: float, best_bid_price: float, wallet_exposure_limit: float, user_defined_leverage: float, side: str, levels: int, min_qty: float, enforce_full_grid: bool) -> float:
         logging.info(f"Calculating total amount for [{symbol}] with total_equity: {total_equity}, best_ask_price: {best_ask_price}, best_bid_price: {best_bid_price}, wallet_exposure_limit: {wallet_exposure_limit}, user_defined_leverage: {user_defined_leverage}, side: {side}, levels: {levels}, min_qty: {min_qty}, enforce_full_grid: {enforce_full_grid}")
@@ -13400,6 +13409,9 @@ class BybitStrategy(BaseStrategy):
         
         # Calculate the maximum position value for the symbol
         max_position_value = total_equity * wallet_exposure_limit
+        logging.info(f"Total Equity: {total_equity}")
+        logging.info(f"Side: {side}")
+        logging.info(f"Wallet Exposure Limit: {wallet_exposure_limit}")
         logging.info(f"Maximum position value for [{symbol}]: {max_position_value}")
 
         # Calculate the current position value
@@ -13424,9 +13436,13 @@ class BybitStrategy(BaseStrategy):
         for i in range(levels):
             level_notional = adjusted_max_position_value * level_notional_factors[i]
             quantity = level_notional / current_price
+            # Add this line to log the raw calculated quantity before rounding
+            logging.info(f"Level {i+1} - Calculated raw quantity: {quantity}")
+            
             rounded_quantity = max(round(quantity / qty_precision) * qty_precision, self.get_min_qty(symbol))
             amounts.append(rounded_quantity)
             logging.info(f"Level {i+1} - Aggressive drawdown order quantity: {rounded_quantity}")
+
 
         return amounts
     
