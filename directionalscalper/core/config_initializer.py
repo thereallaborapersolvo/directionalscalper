@@ -4,7 +4,6 @@ class ConfigInitializer:
         try:
             strategy_instance.levels = config.linear_grid['levels']
             strategy_instance.strength = config.linear_grid['strength']
-            strategy_instance.outer_price_distance = config.linear_grid['outer_price_distance']
             strategy_instance.long_mode = config.linear_grid['long_mode']
             strategy_instance.short_mode = config.linear_grid['short_mode']
             strategy_instance.reissue_threshold = config.linear_grid['reissue_threshold']
@@ -28,7 +27,8 @@ class ConfigInitializer:
             strategy_instance.max_qty_percent_long = config.linear_grid['max_qty_percent_long']
             strategy_instance.max_qty_percent_short = config.linear_grid['max_qty_percent_short']
             strategy_instance.min_outer_price_distance = config.linear_grid['min_outer_price_distance']
-            strategy_instance.max_outer_price_distance = config.linear_grid['max_outer_price_distance']
+            strategy_instance.max_outer_price_distance_long = config.linear_grid['max_outer_price_distance_long']
+            strategy_instance.max_outer_price_distance_short = config.linear_grid['max_outer_price_distance_short']
             strategy_instance.graceful_stop_long = config.linear_grid['graceful_stop_long']
             strategy_instance.graceful_stop_short = config.linear_grid['graceful_stop_short']
             strategy_instance.entry_signal_type = config.linear_grid['entry_signal_type']

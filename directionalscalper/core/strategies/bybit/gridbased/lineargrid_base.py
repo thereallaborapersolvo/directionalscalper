@@ -143,7 +143,6 @@ class LinearGridBaseFutures(BybitStrategy):
 
             levels = self.config.linear_grid['levels']
             strength = self.config.linear_grid['strength']
-            outer_price_distance = self.config.linear_grid['outer_price_distance']
             long_mode = self.config.linear_grid['long_mode']
             short_mode = self.config.linear_grid['short_mode']
             reissue_threshold = self.config.linear_grid['reissue_threshold']
@@ -167,7 +166,8 @@ class LinearGridBaseFutures(BybitStrategy):
             max_qty_percent_long = self.config.linear_grid['max_qty_percent_long']
             max_qty_percent_short = self.config.linear_grid['max_qty_percent_short']
             min_outer_price_distance = self.config.linear_grid['min_outer_price_distance']
-            max_outer_price_distance = self.config.linear_grid['max_outer_price_distance']
+            max_outer_price_distance_long = self.config.linear_grid['max_outer_price_distance_long']
+            max_outer_price_distance_short = self.config.linear_grid['max_outer_price_distance_short']
             graceful_stop_long = self.config.linear_grid['graceful_stop_long']
             graceful_stop_short = self.config.linear_grid['graceful_stop_short']
             additional_entries_from_signal = self.config.linear_grid['additional_entries_from_signal']
@@ -867,9 +867,9 @@ class LinearGridBaseFutures(BybitStrategy):
                             short_pos_qty,
                             levels,
                             strength,
-                            outer_price_distance,
                             min_outer_price_distance,
-                            max_outer_price_distance,
+                            max_outer_price_distance_long,
+                            max_outer_price_distance_short,
                             reissue_threshold,
                             wallet_exposure_limit_long,
                             wallet_exposure_limit_short,
