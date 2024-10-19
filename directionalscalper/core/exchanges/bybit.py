@@ -246,13 +246,78 @@ class BybitExchange(Exchange):
                     price=price,
                     params={**params, 'positionIdx': positionIdx}  # Pass the 'positionIdx' parameter here
                 )
-                logging.info(f"Exchange Response: {order}")
+                logging.info(f"Exchange Response for [{symbol}]: {order}")
                 return order
             else:
                 logging.info(f"side {side} does not exist")
                 return {"error": f"side {side} does not exist"}
         except Exception as e:
             logging.info(f"An unknown error occurred in create_limit_order() for {symbol}: {e}")
+            return {"error": str(e)}
+
+    def create_limit_tp_order_bybit(self, symbol: str, side: str, qty: float, price: float, reduce_only=True, positionIdx=None, params=None):
+        """
+        Creates a limit take-profit order on Bybit, tailored for hedge mode trading.
+
+        This function handles the creation of limit orders in Bybit's hedge mode, allowing 
+        trading on both the buy and sell sides independently. It sets the correct 
+        parameters based on the side of the order, ensuring proper hedge mode functionality 
+        and compliance with reduce-only rules.
+
+        Parameters:
+            symbol (str): The trading pair for the order (e.g., "TIAUSDT").
+            side (str): The direction of the order, either "buy" or "sell".
+            qty (float): The quantity of the asset to trade.
+            price (float): The limit price at which to place the order.
+            reduce_only (bool, optional): If True, the order will only reduce existing positions 
+                                        (default is True).
+            positionIdx (int, optional): The hedge mode position index. 
+                                        - 1 for buy side of hedge mode.
+                                        - 2 for sell side of hedge mode.
+                                        If not provided, the function assigns the correct value 
+                                        based on the order's side.
+            params (dict, optional): Additional parameters to pass to the order creation. 
+
+        Returns:
+            dict: The response from the exchange if successful, or an error message in case of failure.
+
+        Example:
+            order = create_limit_tp_order_bybit(symbol="TIAUSDT", side="sell", qty=4.0, price=4.27, reduce_only=True)
+
+            This creates a limit sell take-profit order for "TIAUSDT" at a price of 4.27, associated 
+            with the sell side of hedge mode.
+        """
+        try:
+            # Default empty params if none provided
+            if params is None:
+                params = {}
+
+            # Determine the correct positionIdx based on the hedge mode
+            if positionIdx is None:
+                if side == "buy":
+                    positionIdx = 1  # Buy side of hedge mode
+                elif side == "sell":
+                    positionIdx = 2  # Sell side of hedge mode
+                else:
+                    raise ValueError(f"Invalid side: {side}")
+
+            # Merge provided params with default parameters
+            params = {**params, "reduceOnly": reduce_only, "postOnly": True, "positionIdx": positionIdx}
+
+            # Create the limit order with the appropriate parameters
+            order = self.exchange.create_order(
+                symbol=symbol,
+                type='limit',
+                side=side,
+                amount=qty,
+                price=price,
+                params=params
+            )
+            logging.info(f"Exchange Response for [{symbol}]: {order}")
+            return order
+
+        except Exception as e:
+            logging.info(f"An unknown error occurred in create_limit_tp_order_bybit() for {symbol}: {e}")
             return {"error": str(e)}
 
     def create_limit_order_bybit_spot(self, symbol: str, side: str, qty: float, price: float, isLeverage=0, orderLinkId=None):
@@ -988,7 +1053,7 @@ class BybitExchange(Exchange):
             if side not in ["buy", "sell"]:
                 raise ValueError(f"Invalid side: {side}")
             params = {"reduceOnly": reduce_only, "postOnly": True}  # Add postOnly parameter
-            return self.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
+            return self.create_limit_tp_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
         else:
             raise ValueError(f"Unsupported order type: {order_type}")
         
@@ -1002,7 +1067,7 @@ class BybitExchange(Exchange):
                 raise ValueError(f"Invalid side: {side}")
 
             params = {"reduceOnly": reduce_only}
-            return self.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
+            return self.create_limit_tp_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
         else:
             raise ValueError(f"Unsupported order type: {order_type}")
 
@@ -1015,7 +1080,7 @@ class BybitExchange(Exchange):
                 raise ValueError(f"Invalid side: {side}")
 
             params = {"reduceOnly": reduce_only, "postOnly": post_only}
-            return self.create_limit_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
+            return self.create_limit_tp_order_bybit(symbol, side, amount, price, positionIdx=positionIdx, params=params)
         else:
             raise ValueError(f"Unsupported order type: {order_type}")
         
