@@ -38,20 +38,20 @@ class LiveTableManager:
 
             if symbols_data_list:
                 last_symbol_data = symbols_data_list[-1]
-            balance = "{:.4f}".format(float(last_symbol_data.get('balance') or 0))
-            available_bal = "{:.4f}".format(float(last_symbol_data.get('available_bal') or 0))
+                balance = "{:.4f}".format(float(last_symbol_data.get('balance') or 0))
+                available_bal = "{:.4f}".format(float(last_symbol_data.get('available_bal') or 0))
                 total_upnl = "{:.4f}".format(sum(
                     (symbol_data.get('long_upnl') or 0) + (symbol_data.get('short_upnl') or 0)
                     for symbol_data in symbols_data_list
                 ))
-            # Styling
-            upnl_value = float(total_upnl)
-            upnl_style = "[italic]" if upnl_value > 9 or upnl_value < -9.5 else "[bold]" if upnl_value > 3.5 or upnl_value < -3.5 else ""
-            upnl_color = "[green]" if upnl_value > 1 else "[red]" if upnl_value < -1 else "[grey]"
-            styled_upnl = f"{upnl_style}{upnl_color}{total_upnl}[/]"
-            table.caption = f"Balance: {balance} | Available: {available_bal} | Total uPnL: {styled_upnl} | Updated: {current_time}"
-        else:
-            table.caption = f"Loading... {len(shared_symbols_data)} symbols loaded | Updated: {current_time}"
+                # Styling
+                upnl_value = float(total_upnl)
+                upnl_style = "[italic]" if upnl_value > 9 or upnl_value < -9.5 else "[bold]" if upnl_value > 3.5 or upnl_value < -3.5 else ""
+                upnl_color = "[green]" if upnl_value > 1 else "[red]" if upnl_value < -1 else "[grey]"
+                styled_upnl = f"{upnl_style}{upnl_color}{total_upnl}[/]"
+                table.caption = f"Balance: {balance} | Available: {available_bal} | Total uPnL: {styled_upnl} | Updated: {current_time}"
+            else:
+                table.caption = f"Loading... {len(shared_symbols_data)} symbols loaded | Updated: {current_time}"
 
         # Sorting symbols
         sorted_symbols = sorted(
@@ -82,7 +82,7 @@ class LiveTableManager:
                 return str(value)
 
             row = [
-                    format_cell(symbol_data.get('symbol', '')),
+                format_cell(symbol_data.get('symbol', '')),
                 format_cell(symbol_data.get('min_qty', 0)),
                 format_cell(round(symbol_data.get('current_price', 0) or 0, 8)),
                 format_cell(symbol_data.get('volume', 0)),
@@ -97,7 +97,7 @@ class LiveTableManager:
                 format_cell(round(symbol_data.get('long_pos_price', 0) or 0, 8)),
                 format_cell(round(symbol_data.get('short_pos_price', 0) or 0, 8))
             ]
-                if is_symbolrowalive:
+            if is_symbolrowalive:
                 table.add_row(*row)
 
         return table
@@ -107,4 +107,4 @@ class LiveTableManager:
         with Live(self.table, refresh_per_second=1/3) as live:
             while True:
                 time.sleep(3)
-                    live.update(self.generate_table())
+                live.update(self.generate_table())
