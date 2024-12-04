@@ -1,3 +1,4 @@
+# /home/labper/directionalscalper/directionalscalper/core/strategies/base_strategy.py
 from colorama import Fore
 from sklearn.cluster import DBSCAN
 from typing import Optional, Tuple, List, Dict, Union
@@ -27,6 +28,8 @@ from ..bot_metrics import BotDatabase
 
 from rate_limit import RateLimit
 
+# Initialize shared_symbols_data as a global variable
+shared_symbols_data = {}
 
 logging = Logger(logger_name="BaseStrategy", filename="BaseStrategy.log", stream=True)
 
@@ -102,6 +105,9 @@ class OrderBookAnalyzer:
 class BaseStrategy:
     initialized_symbols = set()
     initialized_symbols_lock = threading.Lock()
+
+    # Define a class-level lock for symbol management
+    symbol_management_lock = threading.Lock()
 
     def __init__(self, exchange, config, manager, symbols_allowed=None):
         self.exchange = exchange
@@ -408,6 +414,7 @@ class BaseStrategy:
         return 0
 
     def get_open_symbols_long(self, open_position_data):
+        logging.info("Function get_open_symbols_long called")
         """
         Get the symbols with open long positions and format them correctly.
         
@@ -422,6 +429,7 @@ class BaseStrategy:
         return long_symbols
 
     def get_open_symbols_short(self, open_position_data):
+        logging.info("Function get_open_symbols_short called")
         """
         Get the symbols with open short positions and format them correctly.
         
@@ -1518,26 +1526,56 @@ class BaseStrategy:
     #             time.sleep(delay)
     #     raise Exception(f"Failed to execute the API function after {max_retries} retries.")
 
-    def can_trade_new_symbol(self, open_symbols: list, symbols_allowed: int, current_symbol: str) -> bool:
+    def can_trade_new_symbol(self, symbols_allowed: int, symbol: str) -> bool:
         """
-        Checks if the bot can trade a given symbol.
+        Atomically check if the symbol can be traded and register it if allowed.
         """
-        unique_open_symbols = set(open_symbols)  # Convert to set to get unique symbols
-        self.open_symbols_count = len(unique_open_symbols)  # Count unique symbols
-        logging.info(f"Symbols allowed amount: {symbols_allowed}")
-        logging.info(f"Open symbols count (unique): {self.open_symbols_count}")
+        with BaseStrategy.symbol_management_lock:
+            unique_open_symbols = len(set(shared_symbols_data.keys()))
+            logging.info(f"Symbols allowed amount: {symbols_allowed}")
+            logging.info(f"Open symbols count (unique): {unique_open_symbols}")
 
-        if symbols_allowed is None:
-            logging.info(f"Symbols alloweed is none, defaulting to 10")
-            symbols_allowed = 10  # Use a default value if symbols_allowed is not specified
+            if symbols_allowed is None:
+                logging.info(f"Symbols allowed is none, defaulting to 10")
+                symbols_allowed = 10  # Use a default value if symbols_allowed is not specified
 
-        # If we haven't reached the symbol limit or the current symbol is already being traded, allow the trade
-        if self.open_symbols_count < symbols_allowed or current_symbol in unique_open_symbols:
-            logging.info(f"New symbol is allowed : Symbols allowed: {symbols_allowed} Open symbol count: {self.open_symbols_count}")
-            return True
-        else:
-            return False
-            
+            # Allow trading if under the limit or the symbol is already active
+            if unique_open_symbols < symbols_allowed or symbol in shared_symbols_data:
+                logging.info(f"New symbol is allowed: Symbols allowed: {symbols_allowed}, Open symbol count: {unique_open_symbols}")
+                # Register the symbol if not already present
+                if symbol not in shared_symbols_data:
+                    shared_symbols_data[symbol] = {}  # Initialize empty data
+                    logging.info(f"Registered symbol {symbol} as active.")
+                else:
+                    logging.info(f"Symbol {symbol} is already active.")
+                return True
+            else:
+                logging.info(f"New symbol is not allowed: Symbols allowed: {symbols_allowed}, Open symbol count: {unique_open_symbols}")
+                return False
+
+
+    def unregister_symbol(self, symbol: str):
+        """
+        Atomically remove the symbol from shared_symbols_data.
+        """
+        with BaseStrategy.symbol_management_lock:
+            if symbol in shared_symbols_data:
+                del shared_symbols_data[symbol]
+                logging.info(f"Unregistered symbol {symbol} from active symbols.")
+            else:
+                logging.info(f"Symbol {symbol} not found in active symbols.")
+
+    def update_shared_symbol_data(self, symbol: str, symbol_data: dict):
+        """
+        Update the shared_symbols_data for the given symbol within the lock.
+        """
+        with BaseStrategy.symbol_management_lock:
+            if symbol in shared_symbols_data:
+                shared_symbols_data[symbol].update(symbol_data)
+                logging.info(f"Updated shared_symbols_data for {symbol}.")
+            else:
+                logging.warning(f"Attempted to update shared_symbols_data for {symbol}, but it is not registered.")
+
     # def can_trade_new_symbol(self, open_symbols: list, symbols_allowed: int, current_symbol: str) -> bool:
     #     """
     #     Checks if the bot can trade a given symbol.
@@ -3333,6 +3371,40 @@ class BaseStrategy:
     def failsafe_method_leveraged(self, symbol, long_pos_qty, short_pos_qty, long_pos_price, short_pos_price,
                         long_upnl, short_upnl, total_equity, current_price,
                         failsafe_enabled, long_failsafe_upnl_pct, short_failsafe_upnl_pct, failsafe_start_pct):
+        """
+        Implements a failsafe mechanism for leveraged trading positions.
+
+        This method monitors unrealized profit and loss (UPNL) percentages and compares them 
+        to predefined thresholds. If conditions are met, the failsafe triggers partial position 
+        liquidation to mitigate potential losses.
+
+        Parameters:
+            symbol (str): The trading symbol (e.g., BTCUSDT).
+            long_pos_qty (float): Quantity of the long position.
+            short_pos_qty (float): Quantity of the short position.
+            long_pos_price (float): Entry price of the long position.
+            short_pos_price (float): Entry price of the short position.
+            long_upnl (float): Unrealized profit/loss for the long position.
+            short_upnl (float): Unrealized profit/loss for the short position.
+            total_equity (float): Total account equity.
+            current_price (float): Current market price.
+            failsafe_enabled (bool): Indicates whether the failsafe mechanism is active.
+            long_failsafe_upnl_pct (float): UPNL percentage threshold for triggering the long failsafe.
+            short_failsafe_upnl_pct (float): UPNL percentage threshold for triggering the short failsafe.
+            failsafe_start_pct (float): Percentage deviation to start monitoring failsafe conditions.
+
+        Returns:
+            None: Executes failsafe orders if conditions are met.
+
+        Logs:
+            - Details of the current position and UPNL percentages.
+            - Failsafe conditions for long and short positions.
+            - Actions taken when the failsafe triggers.
+
+        Exceptions:
+            Logs and raises any exceptions encountered during execution.
+
+        """
         if not failsafe_enabled:
             return
 
