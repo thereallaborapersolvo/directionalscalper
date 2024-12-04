@@ -183,3 +183,6 @@ logs/MultiBot.log.4
 logs/MultiBot.log.5
 logs/LinearGridBase.log.1
 ZZZZZ.py
+
+logs/*.log
+logs/*.log.*
