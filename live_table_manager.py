@@ -4,14 +4,15 @@ import time
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
+import copy
 
-shared_symbols_data = {}
+# Import shared_symbols_data and BaseStrategy
+from directionalscalper.core.strategies.base_strategy import BaseStrategy, shared_symbols_data
 
 class LiveTableManager:
     def __init__(self):
         self.table = self.generate_table()
         self.row_data = {}  # Dictionary to store row data
-        self.lock = threading.Lock()
 
     def generate_table(self) -> Table:
         table = Table(show_header=True, header_style="bold blue", title="DirectionalScalper")
@@ -31,13 +32,18 @@ class LiveTableManager:
         table.add_column("Long Pos. Price")
         table.add_column("Short Pos. Price")
 
-        # Assuming all symbols have **nearly** the same balance and available balance we pick the last symbol to get these values
         current_time = datetime.datetime.now().strftime('%H:%M:%S %d-%m-%Y')
-        last_symbol_data = list(shared_symbols_data.values())[-1] if shared_symbols_data else None
-        if last_symbol_data:
+        with BaseStrategy.symbol_management_lock:
+            symbols_data_list = list(shared_symbols_data.values())
+
+            if symbols_data_list:
+                last_symbol_data = symbols_data_list[-1]
             balance = "{:.4f}".format(float(last_symbol_data.get('balance') or 0))
             available_bal = "{:.4f}".format(float(last_symbol_data.get('available_bal') or 0))
-            total_upnl = "{:.4f}".format(sum((symbol_data.get('long_upnl') or 0) + (symbol_data.get('short_upnl') or 0) for symbol_data in shared_symbols_data.values()))
+                total_upnl = "{:.4f}".format(sum(
+                    (symbol_data.get('long_upnl') or 0) + (symbol_data.get('short_upnl') or 0)
+                    for symbol_data in symbols_data_list
+                ))
             # Styling
             upnl_value = float(total_upnl)
             upnl_style = "[italic]" if upnl_value > 9 or upnl_value < -9.5 else "[bold]" if upnl_value > 3.5 or upnl_value < -3.5 else ""
@@ -49,10 +55,10 @@ class LiveTableManager:
 
         # Sorting symbols
         sorted_symbols = sorted(
-            [symbol_data for symbol_data in shared_symbols_data.values() if symbol_data['symbol'] in shared_symbols_data],
+            [symbol_data for symbol_data in symbols_data_list if 'symbol' in symbol_data],
             key=lambda x: (
                 -(x.get('long_pos_qty', 0) > 0 or x.get('short_pos_qty', 0) > 0),  # Prioritize symbols with quantities > 0
-                x['symbol']  # Then sort by symbol name
+                x.get('symbol', '')  # Then sort by symbol name
             )
         )
         
@@ -72,11 +78,11 @@ class LiveTableManager:
                 if is_bold:
                     return f"[b]{value}[/b]"
                 elif is_highlight:
-                    return f"[b]{value}[/b]" if value > 0 else str(value) #if for some reason there isn't a position and there's a Pnl (making sure there's no )
+                        return f"[b]{value}[/b]" if value > 0 else str(value)
                 return str(value)
 
             row = [
-                format_cell(symbol_data['symbol']),
+                    format_cell(symbol_data.get('symbol', '')),
                 format_cell(symbol_data.get('min_qty', 0)),
                 format_cell(round(symbol_data.get('current_price', 0) or 0, 8)),
                 format_cell(symbol_data.get('volume', 0)),
@@ -91,7 +97,7 @@ class LiveTableManager:
                 format_cell(round(symbol_data.get('long_pos_price', 0) or 0, 8)),
                 format_cell(round(symbol_data.get('short_pos_price', 0) or 0, 8))
             ]
-            if is_symbolrowalive: #if it's a symbol with long or short position > 0
+                if is_symbolrowalive:
                 table.add_row(*row)
 
         return table
@@ -101,5 +107,4 @@ class LiveTableManager:
         with Live(self.table, refresh_per_second=1/3) as live:
             while True:
                 time.sleep(3)
-                with self.lock:
                     live.update(self.generate_table())
