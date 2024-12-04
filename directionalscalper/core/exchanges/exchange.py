@@ -398,15 +398,15 @@ class Exchange:
                 new_signal = 'short'
 
             current_time = time.time()
-            logging.info(f"New signal for {symbol} : {new_signal}")
-            logging.info(f"Last signal for {symbol} : {self.last_signal.get(symbol, 'None')}")
+            logging.info(f"[{symbol}]: New signal for {symbol} : {new_signal}")
+            logging.info(f"[{symbol}]: Last signal for {symbol} : {self.last_signal.get(symbol, 'None')}")
 
             # Avoid double entries and ensure signal change
             if symbol in self.last_signal:
                 if self.last_signal[symbol] == new_signal and new_signal != 'neutral':
                     # Check if sufficient time has passed to act on the same signal
                     if current_time - self.last_signal_time[symbol] < 15:  # 15 second buffer
-                        logging.info(f"Returning {new_signal} because {self.last_signal[symbol]} is same as new signal and time difference is within buffer")
+                        logging.info(f"[{symbol}]: Returning {new_signal} because {self.last_signal[symbol]} is same as new signal and time difference is within buffer")
                         return new_signal  # Return the same signal if within the buffer time
                     else:
                         self.last_signal_time[symbol] = current_time
@@ -420,7 +420,7 @@ class Exchange:
                 self.last_signal_time[symbol] = current_time
                 return new_signal
         except Exception as e:
-            logging.info(f"Error in calculating signal: {e}")
+            logging.info(f"[{symbol}]: Error in calculating signal: {e}")
             return 'neutral'
         
     # def generate_l_signals(self, symbol, limit=3000, neighbors_count=8, use_adx_filter=False, adx_threshold=20):
@@ -1118,11 +1118,11 @@ class Exchange:
             # Check if the symbol is already in the order history
             if symbol not in self.entry_order_ids:
                 self.entry_order_ids[symbol] = []
-                logging.info(f"Creating new order history entry for symbol: {symbol}")
+                logging.info(f"[{symbol}]: Creating new order history entry for symbol: {symbol}")
 
             # Append the new order data
             self.entry_order_ids[symbol].append({'id': order_id, 'timestamp': timestamp})
-            logging.info(f"Updated order history for {symbol} with order ID {order_id} at timestamp {timestamp}")
+            logging.info(f"[{symbol}]: Updated order history for {symbol} with order ID {order_id} at timestamp {timestamp}")
 
             # Optionally, log the entire current order history for the symbol
             logging.debug(f"Current order history for {symbol}: {self.entry_order_ids[symbol]}")
@@ -1133,12 +1133,12 @@ class Exchange:
     def populate_order_history(self, symbols: list, since: int = None, limit: int = 100):
         for symbol in symbols:
             try:
-                logging.info(f"Fetching trades for {symbol}")
+                logging.info(f"[{symbol}]: Fetching trades for {symbol}")
                 recent_trades = self.exchange.fetch_trades(symbol, since=since, limit=limit)
 
                 # Check if recent_trades is None or empty
                 if not recent_trades:
-                    logging.info(f"No trade data returned for {symbol}. It might not be a valid symbol or no recent trades.")
+                    logging.info(f"[{symbol}]: No trade data returned for {symbol}. It might not be a valid symbol or no recent trades.")
                     continue
 
                 last_trade = recent_trades[-1]
@@ -1148,7 +1148,7 @@ class Exchange:
                     self.order_timestamps[symbol] = []
                 self.order_timestamps[symbol].append(last_trade_time)
 
-                logging.info(f"Updated order timestamps for {symbol} with last trade at {last_trade_time}")
+                logging.info(f"[{symbol}]: Updated order timestamps for {symbol} with last trade at {last_trade_time}")
 
             except Exception as e:
                 logging.error(f"Exception occurred while processing trades for {symbol}: {e}")
@@ -1167,10 +1167,10 @@ class Exchange:
                 Exchange.symbols_cache_time = current_time
                 return symbols
             except ccxt.errors.RateLimitExceeded as e:
-                logging.info(f"Get symbols Rate limit exceeded: {e}, retrying in 10 seconds...")
+                logging.info(f"[{symbol}]: Get symbols Rate limit exceeded: {e}, retrying in 10 seconds...")
                 time.sleep(10)
             except Exception as e:
-                logging.info(f"An error occurred while fetching symbols: {e}, retrying in 10 seconds...")
+                logging.info(f"[{symbol}]: An error occurred while fetching symbols: {e}, retrying in 10 seconds...")
                 time.sleep(10)
 
     # def _get_symbols(self):
@@ -1254,16 +1254,16 @@ class Exchange:
     def debug_derivatives_positions(self, symbol):
         try:
             positions = self.exchange.fetch_derivatives_positions([symbol])
-            logging.info(f"Debug positions: {positions}")
+            logging.info(f"[{symbol}]: Debug positions: {positions}")
         except Exception as e:
-            logging.info(f"Exception in debug derivs func: {e}")
+            logging.info(f"[{symbol}]: Exception in debug derivs func: {e}")
 
     def debug_derivatives_markets_bybit(self):
         try:
             markets = self.exchange.fetch_derivatives_markets({'category': 'linear'})
-            logging.info(f"Debug markets: {markets}")
+            logging.info(f"[{symbol}]: Debug markets: {markets}")
         except Exception as e:
-            logging.info(f"Exception in debug_derivatives_markets_bybit: {e}")
+            logging.info(f"[{symbol}]: Exception in debug_derivatives_markets_bybit: {e}")
 
     def parse_trading_fee(self, fee_data):
         maker_fee = float(fee_data.get('makerFeeRate', '0'))
@@ -1280,7 +1280,7 @@ class Exchange:
             symbol_data = self.exchange.market(symbol)
             print(symbol_data)
         except Exception as e:
-            logging.info(f"Error occurred in debug_binance_market_data: {e}")
+            logging.info(f"[{symbol}]: Error occurred in debug_binance_market_data: {e}")
         
     def fetch_trades(self, symbol: str, since: int = None, limit: int = None, params={}):
         """
@@ -1302,7 +1302,7 @@ class Exchange:
             try:
                 return function(*args, **kwargs)
             except Exception as e:
-                logging.info(f"Error occurred during API call: {e}. Retrying in {delay} seconds...")
+                logging.info(f"[{symbol}]: Error occurred during API call: {e}. Retrying in {delay} seconds...")
                 time.sleep(delay)
         raise Exception(f"Failed to execute the API function after {max_retries} retries.")
     
@@ -1348,7 +1348,7 @@ class Exchange:
                             float(data["info"]["result"][quote]["equity"]), 2
                         )
         except Exception as e:
-            logging.info(f"An unknown error occurred in get_balance(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in get_balance(): {e}")
         return values
 
     def is_valid_symbol(self, symbol: str) -> bool:
@@ -1391,38 +1391,48 @@ class Exchange:
                     
                     return df
 
+            except ccxt.BadSymbol as e:
+                logging.error(f"[{symbol}]: Bad symbol error: {e}")
+                break  # Exit the loop as the symbol is invalid
+
+            except ccxt.AuthenticationError as e:
+                logging.error(f"[{symbol}]: Authentication error: {e}")
+                break  # Exit the loop as authentication won't resolve with retries
+
             except ccxt.RateLimitExceeded as e:
                 retries += 1
                 delay = min(base_delay * (2 ** retries) + random.uniform(0, 0.1 * (2 ** retries)), max_delay)
-                logging.info(f"Rate limit exceeded: {e}. Retrying in {delay:.2f} seconds...")
+                logging.warning(f"[{symbol}]: Rate limit exceeded: {e}. Retrying in {delay:.2f} seconds...")
                 time.sleep(delay)
+                continue
 
-            except ccxt.BadSymbol as e:
-                # Handle the BadSymbol error gracefully and exit the loop
-                logging.info(f"Bad symbol: {symbol}. Error: {e}")
-                break  # Exit the retry loop as the symbol is invalid
+            except ccxt.NetworkError as e:
+                retries += 1
+                delay = min(base_delay * (2 ** retries) + random.uniform(0, 0.1 * (2 ** retries)), max_delay)
+                logging.warning(f"[{symbol}]: Network error: {e}. Retrying in {delay:.2f} seconds...")
+                time.sleep(delay)
+                continue
 
             except ccxt.BaseError as e:
-                # Log the error message
-                logging.info(f"Failed to fetch OHLCV data: {self.exchange.id} {e}")
-                logging.error(traceback.format_exc())
-                return pd.DataFrame()  # Return empty DataFrame for other base errors
+                retries += 1
+                delay = min(base_delay * (2 ** retries) + random.uniform(0, 0.1 * (2 ** retries)), max_delay)
+                logging.warning(f"[{symbol}]: CCXT BaseError: {e}. Retrying in {delay:.2f} seconds...")
 
             except Exception as e:
                 # Log the error message and traceback
-                logging.info(f"Unexpected error occurred while fetching OHLCV data: {e}")
+                logging.info(f"[{symbol}]: Unexpected error occurred while fetching OHLCV data: {e}")
                 logging.error(traceback.format_exc())
                 
                 # Handle specific error scenarios
                 if isinstance(e, TypeError) and 'string indices must be integers' in str(e):
-                    logging.info(f"TypeError occurred: {e}")
-                    logging.info(f"Response content: {self.exchange.last_http_response}")
+                    logging.info(f"[{symbol}]: TypeError occurred: {e}")
+                    logging.info(f"[{symbol}]: Response content: {self.exchange.last_http_response}")
                     
                     try:
                         response = json.loads(self.exchange.last_http_response)
-                        logging.info(f"Parsed response into a dictionary: {response}")
+                        logging.info(f"[{symbol}]: Parsed response into a dictionary: {response}")
                     except json.JSONDecodeError as json_error:
-                        logging.info(f"Failed to parse response: {json_error}")
+                        logging.info(f"[{symbol}]: Failed to parse response: {json_error}")
                 
                 return pd.DataFrame()  # Return empty DataFrame on unexpected errors
 
@@ -1740,7 +1750,7 @@ class Exchange:
                 if "Too many visits" in str(http_err) or (http_err.response.status_code == 429):
                     if attempt < max_retries - 1:
                         delay = retry_delay * (attempt + 1)  # Variable delay
-                        logging.info(f"Rate limit error in get_orderbook(). Retrying in {delay} seconds...")
+                        logging.info(f"[{symbol}]: Rate limit error in get_orderbook(). Retrying in {delay} seconds...")
                         time.sleep(delay)
                         continue
                 else:
@@ -1749,7 +1759,7 @@ class Exchange:
 
             except Exception as e:
                 if attempt < max_retries - 1:  # if not the last attempt
-                    logging.info(f"An unknown error occurred in get_orderbook(): {e}. Retrying in {retry_delay} seconds...")
+                    logging.info(f"[{symbol}]: An unknown error occurred in get_orderbook(): {e}. Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
                     logging.error(f"Failed to fetch order book after {max_retries} attempts: {e}")
@@ -1818,13 +1828,13 @@ class Exchange:
                             data[side]["entryPrice"]
                         )
         except Exception as e:
-            logging.info(f"An unknown error occurred in get_positions(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in get_positions(): {e}")
         return values
 
     def get_current_price(self, symbol: str) -> float:
         try:
             ticker = self.exchange.fetch_ticker(symbol)
-            logging.info(f"Fetched ticker for {symbol}: {ticker}")
+            logging.info(f"[{symbol}]: Fetched ticker for {symbol}: {ticker}")
 
             if "bid" in ticker and "ask" in ticker:
                 bid = ticker["bid"]
@@ -1844,7 +1854,7 @@ class Exchange:
             else:
                 raise KeyError(f"Ticker does not contain 'bid' or 'ask': {ticker}")
         except Exception as e:
-            logging.info(f"An error occurred in get_current_price() for {symbol}: {e}")
+            logging.info(f"[{symbol}]: An error occurred in get_current_price() for {symbol}: {e}")
             logging.info(traceback.format_exc())
             return None
 
@@ -1868,7 +1878,7 @@ class Exchange:
             if highest_bid and lowest_ask:
                 current_price = (highest_bid + lowest_ask) / 2
         except Exception as e:
-            logging.info(f"An unknown error occurred in get_current_price_binance(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in get_current_price_binance(): {e}")
         return current_price
 
     # def get_leverage_tiers_binance(self, symbols: Optional[List[str]] = None):
@@ -1928,7 +1938,7 @@ class Exchange:
             try:
                 bars = self.exchange.fetch_ohlcv(symbol=symbol, timeframe=timeframe, limit=num_bars)
                 if not bars:
-                    logging.info(f"No data returned for {symbol} on {timeframe}. Retrying...")
+                    logging.info(f"[{symbol}]: No data returned for {symbol} on {timeframe}. Retrying...")
                     time.sleep(retry_delay)
                     continue
                 
@@ -1948,10 +1958,10 @@ class Exchange:
                     break
             except Exception as e:
                 if i < max_retries - 1:
-                    logging.info(f"An unknown error occurred in get_moving_averages(): {e}. Retrying in {retry_delay} seconds...")
+                    logging.info(f"[{symbol}]: An unknown error occurred in get_moving_averages(): {e}. Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
-                    logging.info(f"Failed to fetch moving averages after {max_retries} attempts: {e}")
+                    logging.info(f"[{symbol}]: Failed to fetch moving averages after {max_retries} attempts: {e}")
                     return values  # Return whatever we have, even if incomplete
 
         return values
@@ -1961,7 +1971,7 @@ class Exchange:
             # Fetch the order details from the exchange using the order ID
             order_details = self.fetch_order(order_id, symbol)
 
-            logging.info(f"Order details for {symbol}: {order_details}")
+            logging.info(f"[{symbol}]: Order details for {symbol}: {order_details}")
 
             # Extract and return the order status
             return order_details['status']
@@ -1990,7 +2000,7 @@ class Exchange:
                         }
                         open_orders_list.append(order_info)
         except Exception as e:
-            logging.info(f"Bybit An unknown error occurred in get_open_orders(): {e}")
+            logging.info(f"[{symbol}]: Bybit An unknown error occurred in get_open_orders(): {e}")
         return open_orders_list
 
     def cancel_all_entries_binance(self, symbol: str):
@@ -2010,7 +2020,7 @@ class Exchange:
             open_orders = self.exchange.fetch_open_orders(symbol)
             logging.info(open_orders)
         except:
-            logging.info(f"Fuck")
+            logging.info(f"[{symbol}]: Fuck")
 
     def cancel_long_entry(self, symbol: str) -> None:
         self._cancel_entry(symbol, order_side="Buy")
@@ -2034,9 +2044,9 @@ class Exchange:
                         and not reduce_only
                     ):
                         self.exchange.cancel_order(symbol=symbol, id=order_id)
-                        logging.info(f"Cancelling {order_side} order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling {order_side} order: {order_id}")
         except Exception as e:
-            logging.info(f"An unknown error occurred in _cancel_entry(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in _cancel_entry(): {e}")
 
     def cancel_all_open_orders_bybit(self, derivatives: bool = False, params={}):
         """
@@ -2058,7 +2068,7 @@ class Exchange:
             except ccxt.RateLimitExceeded as e:
                 # If rate limit error and not the last retry, then wait and try again
                 if retry < max_retries - 1:
-                    logging.info(f"Rate limit exceeded. Retrying in {retry_delay} seconds...")
+                    logging.info(f"[{symbol}]: Rate limit exceeded. Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:  # If it's the last retry, raise the error
                     logging.error(f"Rate limit exceeded after {max_retries} retries.")
@@ -2109,8 +2119,8 @@ class Exchange:
     def cancel_all_reduce_only_orders_bybit(self, symbol: str) -> None:
         try:
             orders = self.exchange.fetch_open_orders(symbol)
-            logging.info(f"[Thread ID: {threading.get_ident()}] cancel_all_reduce_only_orders_bybit function accessed")
-            logging.info(f"Fetched orders: {orders}")
+            logging.info(f"[{symbol}]: [Thread ID: {threading.get_ident()}] cancel_all_reduce_only_orders_bybit function accessed")
+            logging.info(f"[{symbol}]: Fetched orders: {orders}")
 
             for order in orders:
                 if order['status'] in ['open', 'partially_filled']:
@@ -2118,17 +2128,17 @@ class Exchange:
                     if order['reduceOnly']:
                         order_id = order['id']
                         self.exchange.cancel_order(order_id, symbol)
-                        logging.info(f"Cancelling reduce-only order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling reduce-only order: {order_id}")
 
         except Exception as e:
-            logging.info(f"An error occurred in cancel_all_reduce_only_orders_bybit(): {e}")
+            logging.info(f"[{symbol}]: An error occurred in cancel_all_reduce_only_orders_bybit(): {e}")
 
     # v5
     def cancel_all_entries_bybit(self, symbol: str) -> None:
         try:
             orders = self.exchange.fetch_open_orders(symbol)
-            logging.info(f"[Thread ID: {threading.get_ident()}] cancel_all_entries function in exchange class accessed")
-            logging.info(f"Fetched orders: {orders}")
+            logging.info(f"[{symbol}]: [Thread ID: {threading.get_ident()}] cancel_all_entries function in exchange class accessed")
+            logging.info(f"[{symbol}]: Fetched orders: {orders}")
 
             for order in orders:
                 if order['status'] in ['open', 'partially_filled']:
@@ -2136,10 +2146,10 @@ class Exchange:
                     if not order['reduceOnly']:
                         order_id = order['id']
                         self.exchange.cancel_order(order_id, symbol)
-                        logging.info(f"Cancelling order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling order: {order_id}")
 
         except Exception as e:
-            logging.info(f"An unknown error occurred in cancel_all_entries_bybit(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in cancel_all_entries_bybit(): {e}")
 
     def cancel_entry(self, symbol: str) -> None:
         try:
@@ -2158,7 +2168,7 @@ class Exchange:
                         and not reduce_only
                     ):
                         self.exchange.cancel_order(symbol=symbol, id=order_id)
-                        logging.info(f"Cancelling order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling order: {order_id}")
                     elif (
                         order_status != "Filled"
                         and order_side == "Sell"
@@ -2166,9 +2176,9 @@ class Exchange:
                         and not reduce_only
                     ):
                         self.exchange.cancel_order(symbol=symbol, id=order_id)
-                        logging.info(f"Cancelling order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling order: {order_id}")
         except Exception as e:
-            logging.info(f"An unknown error occurred in cancel_entry(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in cancel_entry(): {e}")
     
     def cancel_close(self, symbol: str, side: str) -> None:
         try:
@@ -2187,7 +2197,7 @@ class Exchange:
                         and reduce_only
                     ):
                         self.exchange.cancel_order(symbol=symbol, id=order_id)
-                        logging.info(f"Cancelling order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling order: {order_id}")
                     elif (
                         order_status != "Filled"
                         and order_side == "Sell"
@@ -2196,9 +2206,9 @@ class Exchange:
                         and reduce_only
                     ):
                         self.exchange.cancel_order(symbol=symbol, id=order_id)
-                        logging.info(f"Cancelling order: {order_id}")
+                        logging.info(f"[{symbol}]: Cancelling order: {order_id}")
         except Exception as e:
-            logging.info(f"{e}")
+            logging.info(f"[{symbol}]: {e}")
 
     def create_take_profit_order(self, symbol, order_type, side, amount, price=None, reduce_only=False):
         if order_type == 'limit':
@@ -2216,7 +2226,7 @@ class Exchange:
     def create_market_order(self, symbol: str, side: str, amount: float, params={}, close_position: bool = False) -> None:
         try:
             if side not in ["buy", "sell"]:
-                logging.info(f"side {side} does not exist")
+                logging.info(f"[{symbol}]: side {side} does not exist")
                 return
 
             order_type = "market"
@@ -2233,7 +2243,7 @@ class Exchange:
             response = self.exchange.create_order(symbol, order_type, side, amount, params=params)
             return response
         except Exception as e:
-            logging.info(f"An unknown error occurred in create_market_order(): {e}")
+            logging.info(f"[{symbol}]: An unknown error occurred in create_market_order(): {e}")
 
     def test_func(self):
         try:
