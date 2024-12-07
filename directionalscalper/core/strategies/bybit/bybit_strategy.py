@@ -6447,7 +6447,7 @@ class BybitStrategy(BaseStrategy):
         else:
             logging.error(f"[[{symbol}]] Invalid side: {side}")
             return []
-    
+
         logging.info(f"[[{symbol}]] Side: {side_lower}, Wallet Exposure Limit: {wallet_exposure_limit:.4f}")
         logging.info(f"[[{symbol}]] Existing Position Value: {existing_position_value:.4f} USD")
 
@@ -6482,48 +6482,50 @@ class BybitStrategy(BaseStrategy):
         current_price = best_ask_price if side_lower == 'buy' else best_bid_price
         logging.info(f"[[{symbol}]] Current Price: {current_price:.4f} USD")
         
-        for i in range(levels):
-        # Calculate the notional amount for this level based on available exposure
+        # Iterate from the furthest level to the closest
+        for i in reversed(range(levels)):
+            level_number = i + 1  # Adjusting level number for logging (1-based)
+            # Calculate the notional amount for this level based on available exposure
             level_notional = available_position_value * level_notional_factors[i]
             quantity = level_notional / current_price
             logging.debug(
-                f"[[{symbol}]] {side_lower} Level {i+1} - Initial Quantity: {quantity:.8f} units "
+                f"[[{symbol}]] {side_lower} Level {level_number} - Initial Quantity: {quantity:.8f} units "
                 f"(Notional: {level_notional:.4f} USD)"
             )
             
             # Ensure that the grid levels are larger than the current open position or previous levels
-            if i == 0:
-                # Ensure the first level is larger than the open position
-                required_quantity = (existing_position_value / current_price) + (i + 1) * qty_precision
+            if i == levels - 1:
+                # For the furthest level, ensure it's larger than existing positions
+                required_quantity = (existing_position_value / current_price) + (level_number) * qty_precision
                 quantity = max(quantity, required_quantity)
                 logging.debug(
-                    f"[[{symbol}]] {side_lower} Level {i+1} - Required Quantity after first level adjustment: {quantity:.8f} units"
+                    f"[[{symbol}]] {side_lower} Level {level_number} - Required Quantity after furthest level adjustment: {quantity:.8f} units"
                 )
             else:
-                # Ensure each subsequent level is larger than the previous one
-                if quantity <= amounts[-1]:
-                    quantity = amounts[-1] + (i + 1) * qty_precision
-                    logging.debug(f"[[{symbol}]] {side_lower} Level {i+1} - Quantity adjusted to maintain progression: {quantity:.8f} units")
+                # Ensure each closer level is larger than the previous (furthest) one
+                if amounts and quantity <= amounts[-1]:
+                    quantity = amounts[-1] + (level_number) * qty_precision
+                    logging.debug(f"[[{symbol}]] {side_lower} Level {level_number} - Quantity adjusted to maintain progression: {quantity:.8f} units")
             
             # Enforce the minimum notional or quantity
             notional_value = quantity * current_price
             if notional_value < min_notional:
-                logging.debug(f"[[{symbol}]] {side_lower} Level {i+1}: Adjusting order to respect minimum notional requirement.")
+                logging.debug(f"[[{symbol}]] {side_lower} Level {level_number}: Adjusting order to respect minimum notional requirement.")
                 quantity = max(min_notional / current_price, min_qty)  # Ensure min_qty is respected
-                logging.debug(f"[[{symbol}]] {side_lower} Level {i+1} - Quantity after enforcing min notional: {quantity:.8f} units")
+                logging.debug(f"[[{symbol}]] {side_lower} Level {level_number} - Quantity after enforcing min notional: {quantity:.8f} units")
             
             # Round the quantity based on precision and ensure it's above the minimum quantity
             rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_qty)
-            logging.debug(f"[[{symbol}]] {side_lower} Level {i+1} - Rounded Quantity: {rounded_quantity:.4f} units")
+            logging.debug(f"[[{symbol}]] {side_lower} Level {level_number} - Rounded Quantity: {rounded_quantity:.4f} units")
             
             # Calculate the final notional value after rounding
             final_notional = rounded_quantity * current_price
-            logging.debug(f"[[{symbol}]] {side_lower} Level {i+1} - Final Notional: {final_notional:.4f} USD")
+            logging.debug(f"[[{symbol}]] {side_lower} Level {level_number} - Final Notional: {final_notional:.4f} USD")
             
             # Check if adding this level would exceed the available position value
             if cumulative_position_value + final_notional > max_position_value:
-                if i == levels - 1:
-                    # For the last level, allocate remaining exposure if any
+                if i == 0:
+                    # For the closest level, allocate remaining exposure if any
                     remaining_exposure = max_position_value - cumulative_position_value
                     if remaining_exposure >= min_notional:
                         adjusted_quantity = max(remaining_exposure / current_price, min_qty)
@@ -6533,31 +6535,35 @@ class BybitStrategy(BaseStrategy):
                         if adjusted_notional + cumulative_position_value <= max_position_value:
                             amounts.append(adjusted_quantity)
                             logging.info(
-                                f"[[{symbol}]] {side_lower} Level {i+1} - Partial allocation to fit within exposure: {adjusted_quantity:.4f} units "
+                                f"[[{symbol}]] {side_lower} Level {level_number} - Partial allocation to fit within exposure: {adjusted_quantity:.4f} units "
                                 f"(${adjusted_notional:.4f} USD)"
                             )
                             cumulative_position_value += adjusted_notional
                         else:
-                            logging.warning(f"[[{symbol}]] {side_lower} Level {i+1} - Adjusted notional exceeds remaining exposure. Skipping this level.")
+                            logging.warning(f"[[{symbol}]] {side_lower} Level {level_number} - Adjusted notional exceeds remaining exposure. Skipping this level.")
                     else:
-                        logging.warning(f"[[{symbol}]] {side_lower} Level {i+1} - Remaining exposure {remaining_exposure:.4f} USD is below minimum notional. Skipping this level.")
+                        logging.warning(f"[[{symbol}]] {side_lower} Level {level_number} - Remaining exposure {remaining_exposure:.4f} USD is below minimum notional. Skipping this level.")
                 else:
-                    logging.warning(f"[[{symbol}]] {side_lower} Level {i+1} - Allocation exceeds max exposure. Skipping this level.")
+                    logging.warning(f"[[{symbol}]] {side_lower} Level {level_number} - Allocation exceeds max exposure. Skipping this level.")
                 break
             else:
                 # Add the calculated and rounded quantity to the amounts list
                 amounts.append(rounded_quantity)
                 logging.info(
-                    f"[[{symbol}]] {side_lower} Level {i+1} - Progressive drawdown order quantity: {rounded_quantity:.4f} units "
+                    f"[[{symbol}]] {side_lower} Level {level_number} - Progressive drawdown order quantity: {rounded_quantity:.4f} units "
                     f"(${final_notional:.4f} USD)"
                 )
                 
                 # Update cumulative position value after adding the order
                 cumulative_position_value += final_notional
-                logging.info(f"[[{symbol}]] {side_lower} Cumulative Position Value after Level {i+1}: {cumulative_position_value:.4f} USD")
+                logging.info(f"[[{symbol}]] {side_lower} Cumulative Position Value after Level {level_number}: {cumulative_position_value:.4f} USD")
             
+        # Since we iterated in reverse, reverse the amounts to maintain level order from closest to furthest
+        amounts = list(reversed(amounts))
+        
         logging.info(f"[[{symbol}]] Available Position Value after allocation: {available_position_value - (cumulative_position_value - existing_position_value):.4f} USD")
         return amounts
+
 
     def calculate_order_amounts_aggressive_drawdown(self, symbol: str, total_equity: float, 
                                                     best_ask_price: float, best_bid_price: float,
