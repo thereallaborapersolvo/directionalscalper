@@ -6416,18 +6416,18 @@ class BybitStrategy(BaseStrategy):
         return float(market_data["min_qty"])
 
     def calculate_order_amounts_progressive_distribution(
-        self,
-        symbol: str,
-        total_equity: float,
-        best_ask_price: float,
+        self, 
+        symbol: str, 
+        total_equity: float, 
+        best_ask_price: float, 
         best_bid_price: float,
-        wallet_exposure_limit_long: float,
-        wallet_exposure_limit_short: float,
-        levels: int,
-        qty_precision: float,
-        side: str,
-        strength: float,
-        long_pos_qty: float = 0,
+        wallet_exposure_limit_long: float, 
+        wallet_exposure_limit_short: float, 
+        levels: int, 
+        qty_precision: float, 
+        side: str, 
+        strength: float, 
+        long_pos_qty: float = 0, 
         short_pos_qty: float = 0
     ) -> List[float]:
         logging.info(f"[[{symbol}]]calc_progress Function calculate_order_amounts_progressive_distribution called")
@@ -6435,8 +6435,8 @@ class BybitStrategy(BaseStrategy):
             f"[[{symbol}]]calc_progress Calculating progressive drawdown order amounts for {symbol} "
             f"with full position value distribution across {levels} levels."
         )
-
-        # Determine side and reference price
+        
+        # Determine which side (buy or sell) and set the reference price accordingly
         side_lower = side.lower()
         if side_lower == 'buy':
             wallet_exposure_limit = wallet_exposure_limit_long
@@ -6447,28 +6447,30 @@ class BybitStrategy(BaseStrategy):
             existing_position_value = short_pos_qty * best_bid_price
             current_price = best_bid_price
         else:
-            logging.error(f"[[{symbol}]]calc_progress Invalid side: {side}")
+            logging.error(f"[[{symbol}]]calc_progress Invalid side: {side}. Must be 'buy' or 'sell'.")
             return []
 
         logging.info(f"[[{symbol}]]calc_progress Side: {side_lower}, Wallet Exposure Limit: {wallet_exposure_limit:.4f}")
         logging.info(f"[[{symbol}]]calc_progress Existing Position Value: {existing_position_value:.4f} USD")
 
-        # Calculate max and available position value
+        # Calculate the maximum allowed position value and the leftover exposure after existing positions
         max_position_value = total_equity * wallet_exposure_limit
         available_position_value = max_position_value - existing_position_value
         logging.info(f"[[{symbol}]]calc_progress Maximum position value for {symbol}: {max_position_value:.4f} USD")
         logging.info(f"[[{symbol}]]calc_progress Available position value for new allocations: {available_position_value:.4f} USD")
 
+        # If no leftover exposure, we can't allocate more
         if available_position_value <= 0:
-            logging.warning(f"[[{symbol}]]calc_progress No available exposure for {side_lower} side.")
+            logging.warning(f"[[{symbol}]]calc_progress No available exposure for {side_lower} side. Existing positions meet or exceed the limit.")
             return []
 
-        # Fetch min_qty and min_notional
+        # Fetch minimum trade requirements (min_qty and min_notional)
         min_qty = self.get_min_qty(symbol)
         min_notional = self.min_notional(symbol)
         logging.debug(f"[[{symbol}]]calc_progress Minimum Quantity: {min_qty:.4f}, Minimum Notional: {min_notional:.4f} USD")
 
-        # Compute distribution factors (for all max_position_value, not scaled by leftover)
+        # Calculate distribution factors based on 'strength' for all levels assuming full max_position_value
+        # We do not scale by available_position_value. We consider the FULL max_position_value to determine the ideal allocation.
         total_ratio = sum([(i + 1) ** strength for i in range(levels)])
         level_notional_factors = [(i + 1) ** strength / total_ratio for i in range(levels)]
         logging.info(f"[[{symbol}]]calc_progress Strength: {strength:.2f} for {side_lower} side; Level Notional Factors: {level_notional_factors}")
@@ -6494,68 +6496,111 @@ class BybitStrategy(BaseStrategy):
         ideal_allocations.reverse()  # Now index 0 in this list = Level 5, index 1 = Level 4, etc.
 
         cumulative_position_value = existing_position_value
-        leftover = max_position_value - existing_position_value
 
-        logging.debug(f"[[{symbol}]]calc_progress Starting actual allocation from furthest to closest with no runtime progressive adjustments.")
+        logging.debug(
+            f"[[{symbol}]]calc_progress Starting progressive distribution allocation. "
+            f"Processing from furthest level (Level {levels}) down to closest (Level 1)."
+        )
 
-        for idx, (level_number, ideal_qty, ideal_notional) in enumerate(ideal_allocations):
-            # Allocate this level
+        # Iterate from the furthest level to the closest:
+        # Example: for levels=5 -> Level 5 first, then 4, 3, 2, 1
+        for i in reversed(range(levels)):
+            level_number = i + 1
+            logging.debug(f"[[{symbol}]]calc_progress Processing {side_lower} Level {level_number} (furthest first)")
+
+            # Ideal notional for this level if we had the full max_position_value available
+            level_notional = max_position_value * level_notional_factors[i]
+            quantity = level_notional / current_price
             logging.debug(
-                f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Ideal allocation: {ideal_qty:.4f} units (${ideal_notional:.4f})"
+                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Ideal full allocation: Quantity={quantity:.8f} units "
+                f"(Notional: {level_notional:.4f} USD)"
             )
 
-            if leftover <= 0:
-                logging.debug(
-                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: No leftover exposure remains. Skipping."
-                )
-                continue
-
-            # Round quantity and check min_qty
-            rounded_quantity = max(round(ideal_qty / qty_precision) * qty_precision, min_qty)
-            final_notional = rounded_quantity * current_price
-
-            if final_notional <= leftover:
-                # We can allocate full ideal amount (rounded to precision)
-                # Check if final_notional meets min_notional, if not but min_qty is met, still allocate
-                if final_notional < min_notional:
-                    logging.warning(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Notional ${final_notional:.4f} < min_notional ${min_notional:.4f}, "
-                        f"but min_qty is met. Allocating anyway."
+            # Progressive sizing logic:
+            # Furthest level: ensure not trivial compared to existing positions
+            if i == levels - 1:
+                required_quantity = (existing_position_value / current_price) + (level_number * qty_precision)
+                if quantity < required_quantity:
+                    logging.debug(
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Increasing quantity from {quantity:.8f} to "
+                        f"{required_quantity:.8f} units for a meaningful progressive start."
                     )
-                amounts[levels - level_number] = rounded_quantity
-                cumulative_position_value += final_notional
-                leftover -= final_notional
-                logging.info(
-                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Full allocation: {rounded_quantity:.4f} units (${final_notional:.4f})"
-                )
+                quantity = max(quantity, required_quantity)
             else:
-                # Not enough leftover for full ideal
-                logging.warning(
-                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Not enough leftover for full allocation. Attempting partial."
-                )
-                # Attempt partial allocation with leftover
-                partial_qty = leftover / current_price
-                partial_qty = max(round(partial_qty / qty_precision) * qty_precision, min_qty)
-                partial_notional = partial_qty * current_price
-
-                if partial_notional > 0 and partial_notional <= leftover:
-                    # Even if below min_notional, allocate if min_qty is met
-                    if partial_notional < min_notional:
-                        logging.warning(
-                            f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation ${partial_notional:.4f} < min_notional, "
-                            "but min_qty is met. Allocating partial anyway."
-                        )
-                    amounts[levels - level_number] = partial_qty
-                    cumulative_position_value += partial_notional
-                    leftover -= partial_notional
-                    logging.info(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation: {partial_qty:.4f} units (${partial_notional:.4f})"
+                # Closer levels: ensure not smaller than the previously allocated (further) level
+                next_index = i + 1
+                if amounts[next_index] > 0 and quantity <= amounts[next_index]:
+                    adjusted_quantity = amounts[next_index] + (level_number * qty_precision)
+                    logging.debug(
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Adjusting quantity upward from {quantity:.8f} "
+                        f"to {adjusted_quantity:.8f} units to maintain progression."
                     )
+                    quantity = adjusted_quantity
+
+            # Round to meet exchange precision and ensure at least min_qty
+            rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_qty)
+            final_notional = rounded_quantity * current_price
+            logging.debug(
+                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - After rounding: {rounded_quantity:.8f} units "
+                f"(Final Notional: {final_notional:.4f} USD)"
+            )
+
+            # Check if we have enough leftover exposure to allocate full final_notional
+            if cumulative_position_value + final_notional > max_position_value:
+                # Not enough leftover for full allocation; try partial allocation with whatever leftover remains
+                logging.warning(
+                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Full allocation exceeds max exposure. Attempting partial allocation."
+                )
+                remaining_exposure = max_position_value - cumulative_position_value
+
+                if remaining_exposure > 0:
+                    # Partial allocation attempt
+                    partial_qty = remaining_exposure / current_price
+                    partial_qty = max(round(partial_qty / qty_precision) * qty_precision, min_qty)
+                    partial_notional = partial_qty * current_price
+
+                    if partial_notional > 0 and (cumulative_position_value + partial_notional) <= max_position_value:
+                        # Even if partial_notional < min_notional, allocate as long as min_qty is met
+                        if partial_notional < min_notional:
+                            logging.warning(
+                                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation is below min_notional, "
+                                f"but meets min_qty. Allocating partial anyway."
+                            )
+                        amounts[i] = partial_qty
+                        cumulative_position_value += partial_notional
+                        logging.info(
+                            f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation: {partial_qty:.4f} units "
+                            f"(${partial_notional:.4f} USD)."
+                        )
+                    else:
+                        logging.warning(
+                            f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Even partial allocation not possible. Skipping this level."
+                        )
                 else:
                     logging.warning(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Can't even partially allocate. Skipping this level."
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - No remaining exposure to allocate. Skipping this level."
+                    )
+                # Continue to next level without breaking, as we might still allocate leftover at closer levels
+                continue
+            else:
+                # Full allocation possible
+                if final_notional < min_notional:
+                    logging.warning(
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Final notional ${final_notional:.4f} "
+                        f"below min_notional ${min_notional:.4f}, but min_qty is met. Allocating anyway."
                     )
 
+                amounts[i] = rounded_quantity
+                cumulative_position_value += final_notional
+                logging.info(
+                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Allocated: {rounded_quantity:.4f} units "
+                    f"(${final_notional:.4f} USD)"
+                )
+                logging.info(
+                    f"[[{symbol}]]calc_progress {side_lower} Cumulative Position Value after allocating Level {level_number}: {cumulative_position_value:.4f} USD"
+                )
+
+        # After attempting all levels, determine any leftover that couldn't be allocated
         remaining_allocation = (max_position_value - existing_position_value) - (cumulative_position_value - existing_position_value)
         logging.info(
             f"[[{symbol}]]calc_progress Allocation completed. Remaining Position Value after allocation: {remaining_allocation:.4f} USD"
@@ -6565,11 +6610,13 @@ class BybitStrategy(BaseStrategy):
             f"[[{symbol}]]calc_progress Final allocated amounts for {side_lower} side (Level 1 to Level {levels}): {amounts}"
         )
         logging.debug(
-            f"[[{symbol}]]calc_progress No runtime progressive sizing adjustments were made. Initial progressive sizing stands."
+            f"[[{symbol}]]calc_progress No reversal needed. The indexing of levels and amounts is preserved as intended."
         )
 
-        return amounts
+        # Just before returning:
+        amounts.reverse()  # Now the first element is Level 1 (closest), last is Level N (furthest)
 
+        return amounts
 
 
 
