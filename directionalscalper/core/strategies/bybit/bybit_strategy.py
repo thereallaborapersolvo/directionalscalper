@@ -6430,9 +6430,9 @@ class BybitStrategy(BaseStrategy):
         long_pos_qty: float = 0, 
         short_pos_qty: float = 0
     ) -> List[float]:
-        logging.info(f"[[{symbol}]] Function calculate_order_amounts_progressive_distribution called")
+        logging.info(f"[[{symbol}]]calc_progress Function calculate_order_amounts_progressive_distribution called")
         logging.info(
-            f"[[{symbol}]] Calculating progressive drawdown order amounts for {symbol} "
+            f"[[{symbol}]]calc_progress Calculating progressive drawdown order amounts for {symbol} "
             f"with full position value distribution across {levels} levels."
         )
         
@@ -6447,27 +6447,27 @@ class BybitStrategy(BaseStrategy):
             existing_position_value = short_pos_qty * best_bid_price
             current_price = best_bid_price
         else:
-            logging.error(f"[[{symbol}]] Invalid side: {side}")
+            logging.error(f"[[{symbol}]]calc_progress Invalid side: {side}")
             return []
 
-        logging.info(f"[[{symbol}]] Side: {side_lower}, Wallet Exposure Limit: {wallet_exposure_limit:.4f}")
-        logging.info(f"[[{symbol}]] Existing Position Value: {existing_position_value:.4f} USD")
+        logging.info(f"[[{symbol}]]calc_progress Side: {side_lower}, Wallet Exposure Limit: {wallet_exposure_limit:.4f}")
+        logging.info(f"[[{symbol}]]calc_progress Existing Position Value: {existing_position_value:.4f} USD")
 
         # Calculate maximum allowed position value for this symbol and side
         max_position_value = total_equity * wallet_exposure_limit
         available_position_value = max_position_value - existing_position_value
-        logging.info(f"[[{symbol}]] Maximum position value for {symbol}: {max_position_value:.4f} USD")
-        logging.info(f"[[{symbol}]] Available position value for new allocations: {available_position_value:.4f} USD")
+        logging.info(f"[[{symbol}]]calc_progress Maximum position value for {symbol}: {max_position_value:.4f} USD")
+        logging.info(f"[[{symbol}]]calc_progress Available position value for new allocations: {available_position_value:.4f} USD")
 
         # If there's no available exposure left, we can't allocate more orders
         if available_position_value <= 0:
-            logging.warning(f"[[{symbol}]] No available exposure for {side_lower} side. Existing positions meet or exceed the limit.")
+            logging.warning(f"[[{symbol}]]calc_progress No available exposure for {side_lower} side. Existing positions meet or exceed the limit.")
             return []
 
         # Fetch minimum trade requirements
         min_qty = self.get_min_qty(symbol)
         min_notional = self.min_notional(symbol)
-        logging.debug(f"[[{symbol}]] Minimum Quantity: {min_qty:.4f}, Minimum Notional: {min_notional:.4f} USD")
+        logging.debug(f"[[{symbol}]]calc_progress Minimum Quantity: {min_qty:.4f}, Minimum Notional: {min_notional:.4f} USD")
 
         # Distribute the available position value across the specified number of levels
         # using the "strength" factor for progressive distribution.
@@ -6477,8 +6477,8 @@ class BybitStrategy(BaseStrategy):
         #   - Higher levels (further from the market price) generally get more allocation.
         total_ratio = sum([(i + 1) ** strength for i in range(levels)])
         level_notional_factors = [(i + 1) ** strength / total_ratio for i in range(levels)]
-        logging.info(f"[[{symbol}]] Strength: {strength:.2f} for {side_lower} side; Level Notional Factors: {level_notional_factors}")
-        logging.info(f"[[{symbol}]] Current Price: {current_price:.4f} USD")
+        logging.info(f"[[{symbol}]]calc_progress Strength: {strength:.2f} for {side_lower} side; Level Notional Factors: {level_notional_factors}")
+        logging.info(f"[[{symbol}]]calc_progress Current Price: {current_price:.4f} USD")
 
         # We create an array "amounts" that will store the final quantity for each level.
         # IMPORTANT: The indexing of amounts and grid levels should match:
@@ -6494,7 +6494,7 @@ class BybitStrategy(BaseStrategy):
         cumulative_position_value = existing_position_value
 
         logging.debug(
-            f"[[{symbol}]] Starting progressive distribution allocation. "
+            f"[[{symbol}]]calc_progress Starting progressive distribution allocation. "
             f"Iterating from furthest level (Level {levels}) down to closest (Level 1)."
         )
 
@@ -6503,13 +6503,13 @@ class BybitStrategy(BaseStrategy):
         # This ensures we allocate the largest chunk to the farthest level first if needed.
         for i in reversed(range(levels)):
             level_number = i + 1
-            logging.debug(f"[[{symbol}]] Processing {side_lower} Level {level_number} (Furthest first approach)")
+            logging.debug(f"[[{symbol}]]calc_progress Processing {side_lower} Level {level_number} (Furthest first approach)")
 
             # Calculate the notional amount intended for this level based on the distribution factors
             level_notional = available_position_value * level_notional_factors[i]
             quantity = level_notional / current_price
             logging.debug(
-                f"[[{symbol}]] {side_lower} Level {level_number} - Initial calculation: Quantity={quantity:.8f} units "
+                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Initial calculation: Quantity={quantity:.8f} units "
                 f"(Notional: {level_notional:.4f} USD)"
             )
 
@@ -6519,7 +6519,7 @@ class BybitStrategy(BaseStrategy):
                 required_quantity = (existing_position_value / current_price) + (level_number * qty_precision)
                 if quantity < required_quantity:
                     logging.debug(
-                        f"[[{symbol}]] {side_lower} Level {level_number}: Increasing quantity from {quantity:.8f} to "
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Increasing quantity from {quantity:.8f} to "
                         f"{required_quantity:.8f} units to maintain progressive sizing."
                     )
                 quantity = max(quantity, required_quantity)
@@ -6530,7 +6530,7 @@ class BybitStrategy(BaseStrategy):
                 if amounts[next_index] > 0 and quantity <= amounts[next_index]:
                     adjusted_quantity = amounts[next_index] + (level_number * qty_precision)
                     logging.debug(
-                        f"[[{symbol}]] {side_lower} Level {level_number}: Adjusting quantity upward "
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Adjusting quantity upward "
                         f"from {quantity:.8f} to {adjusted_quantity:.8f} units to maintain progression."
                     )
                     quantity = adjusted_quantity
@@ -6541,7 +6541,7 @@ class BybitStrategy(BaseStrategy):
                 # If below minimum notional, adjust upwards
                 new_qty_min_notional = max(min_notional / current_price, min_qty)
                 logging.debug(
-                    f"[[{symbol}]] {side_lower} Level {level_number}: Quantity {quantity:.8f} units "
+                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Quantity {quantity:.8f} units "
                     f"below minimum notional {min_notional:.4f} USD. Adjusting to {new_qty_min_notional:.8f} units."
                 )
                 quantity = new_qty_min_notional
@@ -6551,7 +6551,7 @@ class BybitStrategy(BaseStrategy):
             rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_qty)
             final_notional = rounded_quantity * current_price
             logging.debug(
-                f"[[{symbol}]] {side_lower} Level {level_number} - After rounding: {rounded_quantity:.8f} units "
+                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - After rounding: {rounded_quantity:.8f} units "
                 f"(Final Notional: {final_notional:.4f} USD)"
             )
 
@@ -6567,24 +6567,24 @@ class BybitStrategy(BaseStrategy):
                         if adjusted_notional + cumulative_position_value <= max_position_value:
                             amounts[i] = adjusted_quantity
                             logging.info(
-                                f"[[{symbol}]] {side_lower} Level {level_number} - Partial allocation used "
+                                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation used "
                                 f"to fit remaining exposure: {adjusted_quantity:.4f} units "
                                 f"(${adjusted_notional:.4f} USD)"
                             )
                             cumulative_position_value += adjusted_notional
                         else:
                             logging.warning(
-                                f"[[{symbol}]] {side_lower} Level {level_number} - Even partial allocation "
+                                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Even partial allocation "
                                 f"exceeds remaining exposure. Skipping this level."
                             )
                     else:
                         logging.warning(
-                            f"[[{symbol}]] {side_lower} Level {level_number} - Remaining exposure {remaining_exposure:.4f} USD "
+                            f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Remaining exposure {remaining_exposure:.4f} USD "
                             f"is below minimum notional. Skipping this level."
                         )
                 else:
                     logging.warning(
-                        f"[[{symbol}]] {side_lower} Level {level_number} - Allocation exceeds max exposure. "
+                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Allocation exceeds max exposure. "
                         f"Skipping this level."
                     )
                 # Break out since we can't allocate further levels closer to the price if this one failed
@@ -6593,13 +6593,13 @@ class BybitStrategy(BaseStrategy):
                 # Assign the calculated quantity directly to the correct index
                 amounts[i] = rounded_quantity
                 logging.info(
-                    f"[[{symbol}]] {side_lower} Level {level_number} - Progressive drawdown order quantity: {rounded_quantity:.4f} units "
+                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Progressive drawdown order quantity: {rounded_quantity:.4f} units "
                     f"(${final_notional:.4f} USD)"
                 )
                 # Update cumulative position value
                 cumulative_position_value += final_notional
                 logging.info(
-                    f"[[{symbol}]] {side_lower} Cumulative Position Value after allocating Level {level_number}: {cumulative_position_value:.4f} USD"
+                    f"[[{symbol}]]calc_progress {side_lower} Cumulative Position Value after allocating Level {level_number}: {cumulative_position_value:.4f} USD"
                 )
 
         # Note: We do NOT reverse 'amounts' here.
@@ -6612,14 +6612,14 @@ class BybitStrategy(BaseStrategy):
 
         remaining_allocation = available_position_value - (cumulative_position_value - existing_position_value)
         logging.info(
-            f"[[{symbol}]] Allocation completed. Remaining Position Value after allocation: {remaining_allocation:.4f} USD"
+            f"[[{symbol}]]calc_progress Allocation completed. Remaining Position Value after allocation: {remaining_allocation:.4f} USD"
         )
 
         logging.debug(
-            f"[[{symbol}]] Final allocated amounts for {side_lower} side (Level 1 to Level {levels}): {amounts}"
+            f"[[{symbol}]]calc_progress Final allocated amounts for {side_lower} side (Level 1 to Level {levels}): {amounts}"
         )
         logging.debug(
-            f"[[{symbol}]] No reversal needed. The indexing of levels and amounts is preserved as intended."
+            f"[[{symbol}]]calc_progress No reversal needed. The indexing of levels and amounts is preserved as intended."
         )
 
         return amounts
