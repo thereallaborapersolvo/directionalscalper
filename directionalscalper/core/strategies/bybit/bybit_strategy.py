@@ -3473,6 +3473,32 @@ class BybitStrategy(BaseStrategy):
             f"Dollar Value: ${total_dollar:.4f} USD"
         )
 
+    def log_final_grid_allocations(self, symbol: str, grid_levels: List[float], amounts: List[float], grid_type: str):
+        logging.info(f"[[{symbol}]] Function log_final_grid_allocations called")
+        """
+        Logs the final grid levels and their corresponding allocations.
+        
+        Parameters:
+            symbol (str): Trading symbol.
+            grid_levels (List[float]): List of grid level prices.
+            amounts (List[float]): List of allocated quantities for each grid level.
+            grid_type (str): Type of grid ('Long' or 'Short').
+        """
+        logging.info(f"[[{symbol}]] DEBUG Final {grid_type} Grid Levels and Amounts (Before Filtering):")
+        if grid_type.lower() == 'long':
+            sorted_allocations = sorted(amounts, reverse=True)  # Descending allocations
+            sorted_grid_levels = sorted(grid_levels)  # Ascending prices
+        elif grid_type.lower() == 'short':
+            sorted_allocations = sorted(amounts, reverse=True)  # Descending allocations
+            sorted_grid_levels = sorted(grid_levels, reverse=True)  # Descending prices
+        else:
+            logging.error(f"[[{symbol}]] DEBUG Invalid grid type: {grid_type}")
+            return
+        
+        for i, (price, qty) in enumerate(zip(sorted_grid_levels, sorted_allocations), 1):
+            logging.info(f"[[{symbol}]] DEBUG Level {i}: Price={price:.4f}, Quantity={qty:.4f}")
+
+
     # ======================================================
     # MAIN FUNCTION HERE is "lineargrid_base" as per below:
     # ======================================================
@@ -3517,41 +3543,49 @@ class BybitStrategy(BaseStrategy):
         stop_loss_short: float, 
         stop_loss_enabled: bool
     ):
-        logging.info(f"[[{symbol}]] Function lineargrid_base called")
+        logging.info(f"[[{symbol}]] Lingrid DEBUG Function lineargrid_base called")
 
         try:
-            long_pos_qty = long_pos_qty if long_pos_qty is not None else 0
-            short_pos_qty = short_pos_qty if short_pos_qty is not None else 0
+            # Initialize position quantities
+            long_pos_qty = float(long_pos_qty) if long_pos_qty is not None else 0.0
+            short_pos_qty = float(short_pos_qty) if short_pos_qty is not None else 0.0
 
-            # Ensure long_pos_qty and short_pos_qty are floats
-            try:
-                long_pos_qty = float(long_pos_qty)
-            except (ValueError, TypeError) as e:
-                logging.error(f"[[{symbol}]] Invalid value for long_pos_qty: {long_pos_qty}, Error: {e}")
-                long_pos_qty = 0
+            # Validate position quantities
+            if not isinstance(long_pos_qty, float):
+                logging.error(f"[[{symbol}]] Lingrid DEBUG Invalid value for long_pos_qty: {long_pos_qty}, resetting to 0")
+                long_pos_qty = 0.0
 
-            try:
-                short_pos_qty = float(short_pos_qty)
-            except (ValueError, TypeError) as e:
-                logging.error(f"[[{symbol}]] Invalid value for short_pos_qty: {short_pos_qty}, Error: {e}")
-                short_pos_qty = 0
+            if not isinstance(short_pos_qty, float):
+                logging.error(f"[[{symbol}]] Lingrid DEBUG Invalid value for short_pos_qty: {short_pos_qty}, resetting to 0")
+                short_pos_qty = 0.0
 
+            # Fetch spread and current price
             spread, current_price = self.get_spread_and_price(symbol)
             # dynamic_outer_price_distance = self.calculate_dynamic_outer_price_distance(spread, min_outer_price_distance, max_outer_price_distance)
 
+            # Calculate dynamic outer price distances
             dynamic_outer_price_distance_long, dynamic_outer_price_distance_short = self.calculate_dynamic_outer_price_distance_latest(
                 spread, min_outer_price_distance, max_outer_price_distance_long, max_outer_price_distance_short, symbol
             )
 
-            should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
+            # Determine if orders should be reissued
+            should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(
+                symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct
+            )
+
+            # Fetch open orders
             open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
+            # Initialize filled levels
             self.initialize_filled_levels(symbol)
+
+            # Check if grids are active
             long_grid_active, short_grid_active = self.check_grid_active(symbol, open_orders)
 
-            logging.info(f"[[{symbol}]] Long grid active: {long_grid_active}")
-            logging.info(f"[[{symbol}]] Short grid active: {short_grid_active}")
+            logging.info(f"[[{symbol}]] Lingrid DEBUG Long grid active: {long_grid_active}")
+            logging.info(f"[[{symbol}]] Lingrid DEBUG Short grid active: {short_grid_active}")
 
+            # Manage positions
             self.check_and_manage_positions(
                 long_pos_qty,
                 short_pos_qty,
@@ -3564,21 +3598,36 @@ class BybitStrategy(BaseStrategy):
                 max_qty_percent_short
             )
 
-            buffer_percentage_long, buffer_percentage_short = self.calculate_buffer_percentages(long_pos_qty, short_pos_qty, current_price, long_pos_price, short_pos_price, initial_entry_buffer_pct, min_buffer_percentage, max_buffer_percentage)
-            buffer_distance_long, buffer_distance_short = self.calculate_buffer_distances(current_price, buffer_percentage_long, buffer_percentage_short, symbol)
+            # Calculate buffer percentages and distances
+            buffer_percentage_long, buffer_percentage_short = self.calculate_buffer_percentages(
+                long_pos_qty, short_pos_qty, current_price, long_pos_price, short_pos_price,
+                initial_entry_buffer_pct, min_buffer_percentage, max_buffer_percentage
+            )
+            buffer_distance_long, buffer_distance_short = self.calculate_buffer_distances(
+                current_price, buffer_percentage_long, buffer_percentage_short, symbol
+            )
 
+            # Fetch order book prices
             order_book, best_ask_price, best_bid_price = self.get_order_book_prices(symbol, current_price)
-            # min_price, max_price, price_range, volume_histogram_long, volume_histogram_short = self.calculate_price_range_and_volume_histograms(order_book, current_price, max_outer_price_distance)
 
-            min_price_long, max_price_long, price_range_long, volume_histogram_long, min_price_short, max_price_short, price_range_short, volume_histogram_short = self.calculate_price_range_and_volume_histograms(order_book, current_price, max_outer_price_distance_long, max_outer_price_distance_short)
+            # Calculate price ranges and volume histograms
+            min_price_long, max_price_long, price_range_long, volume_histogram_long, min_price_short, max_price_short, price_range_short, volume_histogram_short = self.calculate_price_range_and_volume_histograms(
+                order_book, current_price, max_outer_price_distance_long, max_outer_price_distance_short
+            )
 
-            # Use the correct price range for each histogram
-            volume_threshold_long, significant_levels_long = self.calculate_volume_thresholds_and_significant_levels(volume_histogram_long, price_range_long)
-            volume_threshold_short, significant_levels_short = self.calculate_volume_thresholds_and_significant_levels(volume_histogram_short, price_range_short)
+            # Determine significant levels based on volume thresholds
+            volume_threshold_long, significant_levels_long = self.calculate_volume_thresholds_and_significant_levels(
+                volume_histogram_long, price_range_long
+            )
+            volume_threshold_short, significant_levels_short = self.calculate_volume_thresholds_and_significant_levels(
+                volume_histogram_short, price_range_short
+            )
 
-            # Call dbscan_classification if grid_behavior is set to "dbscanalgo"
+            # Calculate grid levels based on grid behavior
             if grid_behavior == "dbscanalgo":
-                initial_entry_long, initial_entry_short = self.calculate_initial_entries(current_price, buffer_distance_long, buffer_distance_short)
+                initial_entry_long, initial_entry_short = self.calculate_initial_entries(
+                    current_price, buffer_distance_long, buffer_distance_short
+                )
                 zigzag_length = 5  # Example value; replace with actual config value
                 epsilon_deviation = 2.5  # Example value; replace with actual config value
                 aggregate_range = 5  # Example value; replace with actual config value
@@ -3591,16 +3640,18 @@ class BybitStrategy(BaseStrategy):
                 # Create OHLCV format expected by dbscan_classification
                 ohlcv_data = [{'high': high, 'low': low, 'volume': volume} for high, low, volume in zip(highs, lows, volumes)]
                 
-                # Correct function call with four arguments
+                # Perform DBSCAN classification to determine support/resistance levels
                 support_resistance_levels = self.dbscan_classification(ohlcv_data, zigzag_length, epsilon_deviation, aggregate_range)
-                initial_entry_long, initial_entry_short = self.calculate_initial_entries(current_price, buffer_distance_long, buffer_distance_short)
-                # Extract levels from the dbscan classification results
+                
+                # Extract levels based on classification results
                 grid_levels_long = [level['level'] for level in support_resistance_levels if level['level'] >= current_price]
                 grid_levels_short = [level['level'] for level in support_resistance_levels if level['level'] <= current_price]
 
             else:
-                initial_entry_long, initial_entry_short = self.calculate_initial_entries(current_price, buffer_distance_long, buffer_distance_short)
-                # grid_levels_long, grid_levels_short = self.calculate_grid_levels(long_pos_qty, short_pos_qty, levels, initial_entry_long, initial_entry_short, current_price, buffer_distance_long, buffer_distance_short, max_outer_price_distance)
+                # Standard grid level calculation
+                initial_entry_long, initial_entry_short = self.calculate_initial_entries(
+                    current_price, buffer_distance_long, buffer_distance_short
+                )
                 grid_levels_long, grid_levels_short = self.calculate_grid_levels(
                     long_pos_qty, short_pos_qty, levels, 
                     initial_entry_long, initial_entry_short, 
@@ -3609,9 +3660,7 @@ class BybitStrategy(BaseStrategy):
                     max_outer_price_distance_long, max_outer_price_distance_short
                 )
 
-            # adjusted_grid_levels_long = self.adjust_grid_levels(grid_levels_long, significant_levels_long, tolerance=0.01, min_outer_price_distance=min_outer_price_distance, max_outer_price_distance=max_outer_price_distance, current_price=current_price, levels=levels)
-            # adjusted_grid_levels_short = self.adjust_grid_levels(grid_levels_short, significant_levels_short, tolerance=0.01, min_outer_price_distance=min_outer_price_distance, max_outer_price_distance=max_outer_price_distance, current_price=current_price, levels=levels)
-
+            # Adjust grid levels based on significant levels and price distances
             adjusted_grid_levels_long = self.adjust_grid_levels(
                 grid_levels_long,
                 significant_levels_long,
@@ -3634,8 +3683,7 @@ class BybitStrategy(BaseStrategy):
                 levels=levels
             )
 
-            # grid_levels_long, grid_levels_short = self.finalize_grid_levels(adjusted_grid_levels_long, adjusted_grid_levels_short, levels, current_price, buffer_distance_long, buffer_distance_short, max_outer_price_distance, initial_entry_long, initial_entry_short)
-
+            # Finalize grid levels
             grid_levels_long, grid_levels_short = self.finalize_grid_levels(
                 adjusted_grid_levels_long, adjusted_grid_levels_short, 
                 levels, current_price, 
@@ -3643,13 +3691,37 @@ class BybitStrategy(BaseStrategy):
                 max_outer_price_distance_long, max_outer_price_distance_short, 
                 initial_entry_long, initial_entry_short, symbol
             )
+            
+            logging.debug(f"[[{symbol}]] Lingrid DEBUG Post finalize_grid_levels - Long: {grid_levels_long}, Short: {grid_levels_short}")
+
+            # --- Ensure Proper Sorting Here ---
+            # Convert grid levels to float if they are not already
+            grid_levels_long = [float(price) for price in grid_levels_long]
+            grid_levels_short = [float(price) for price in grid_levels_short]
+
+            # Log grid levels before sorting
+            logging.debug(f"[[{symbol}]]lingrid DEBUG: Grid Levels Before Sorting - Long: {grid_levels_long}")
+            logging.debug(f"[[{symbol}]]lingrid DEBUG: Grid Levels Before Sorting - Short: {grid_levels_short}")
+
+            # Ensure grid levels are sorted appropriately
+            # For long positions: ascending order (lowest to highest price)
+            grid_levels_long = sorted(grid_levels_long)
+            # For short positions: descending order (highest to lowest price)
+            grid_levels_short = sorted(grid_levels_short, reverse=True)
+
+            # Log grid levels after sorting
+            logging.debug(f"[[{symbol}]]lingrid DEBUG: Grid Levels After Sorting - Long: {grid_levels_long}")
+            logging.debug(f"[[{symbol}]]lingrid DEBUG: Grid Levels After Sorting - Short: {grid_levels_short}")
+            # --- End of Sorting ---
 
             # Get quantity precision and minimum quantity
             qty_precision, min_qty = self.get_precision_and_min_qty(symbol)
+            min_notional = self.min_notional(symbol)
+            logging.debug(f"[[{symbol}]]lingrid DEBUG: Quantity Precision: {qty_precision}, Min Qty: {min_qty}, Min Notional: {min_notional}")
 
             # Apply drawdown behavior based on configuration
             if drawdown_behavior == "full_distribution":
-                logging.info(f"[[{symbol}]] Activating full distribution drawdown behavior for [[{symbol}]]")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Activating full distribution drawdown behavior for [[{symbol}]]")
 
                 # Calculate order amounts for aggressive drawdown with strength
                 amounts_long = self.calculate_order_amounts_aggressive_drawdown(
@@ -3664,72 +3736,109 @@ class BybitStrategy(BaseStrategy):
                 )
 
                 # Enhanced Logging: Map grid levels to order quantities and their dollar values
-                logging.info(f"[[{symbol}]] Long Grid Orders:")
-                
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Long Grid Orders:")
                 for i, (price, qty) in enumerate(zip(grid_levels_long, amounts_long), 1):
                     dollar_value = qty * price
                     logging.info(
-                        f"[[{symbol}]] Level {i} - Price: {price:.4f} USD, "
+                        f"[[{symbol}]] Lingrid DEBUG Level {i} - Price: {price:.4f} USD, "
                         f"Quantity: {qty:.4f} units, Dollar Value: ${dollar_value:.4f} USD"
                     )
                 
-                # Log total quantities and dollar values for long grids using the helper function
+                # Log total allocations
                 self.log_total_grid_allocation(symbol, 'Long', grid_levels_long, amounts_long)
                 
-                logging.info(f"[[{symbol}]] Short Grid Orders:")
-                
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Short Grid Orders:")
                 for i, (price, qty) in enumerate(zip(grid_levels_short, amounts_short), 1):
                     dollar_value = qty * price
                     logging.info(
-                        f"[[{symbol}]] Level {i} - Price: {price:.4f} USD, "
+                        f"[[{symbol}]] Lingrid DEBUG Level {i} - Price: {price:.4f} USD, "
                         f"Quantity: {qty:.4f} units, Dollar Value: ${dollar_value:.4f} USD"
                     )
                 
-                # Log total quantities and dollar values for short grids using the helper function
+                # Log total allocations
                 self.log_total_grid_allocation(symbol, 'Short', grid_levels_short, amounts_short)
 
             elif drawdown_behavior == "progressive_drawdown":
-                logging.info(f"[[{symbol}]] Activating progressive drawdown behavior for {symbol}")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Activating progressive drawdown behavior for {symbol}")
 
-                # Calculate order amounts for progressive drawdown using progressive distribution
+                # Calculate allocations
                 amounts_long = self.calculate_order_amounts_progressive_distribution(
                     symbol, total_equity, best_ask_price, best_bid_price,
                     wallet_exposure_limit_long, wallet_exposure_limit_short,
-                    levels, qty_precision, side='buy', strength=strength, long_pos_qty=long_pos_qty
+                    levels, qty_precision, side='buy', strength=strength, long_pos_qty=long_pos_qty, short_pos_qty=short_pos_qty
                 )
                 amounts_short = self.calculate_order_amounts_progressive_distribution(
                     symbol, total_equity, best_ask_price, best_bid_price,
                     wallet_exposure_limit_long, wallet_exposure_limit_short,
-                    levels, qty_precision, side='sell', strength=strength, short_pos_qty=short_pos_qty
+                    levels, qty_precision, side='sell', strength=strength, long_pos_qty=long_pos_qty, short_pos_qty=short_pos_qty
                 )
 
-                # Enhanced Logging: Map grid levels to order quantities and their dollar values
-                logging.info(f"[[{symbol}]] Long Grid Orders:")
-                
+                # Sort allocations descending and assign back to amounts_long and amounts_short
+                amounts_long = sorted(amounts_long, reverse=True)
+                amounts_short = sorted(amounts_short, reverse=True)
+
+                # Log allocations using the helper function
+                self.log_final_grid_allocations(symbol, grid_levels_long, amounts_long, "Long")
+                self.log_final_grid_allocations(symbol, grid_levels_short, amounts_short, "Short")
+
+                # Filter out allocations below min_qty
+                filtered_grid_levels_long = []
+                filtered_amounts_long = []
+                for price, qty in zip(grid_levels_long, amounts_long):
+                    if qty >= min_qty:
+                        filtered_grid_levels_long.append(price)
+                        filtered_amounts_long.append(qty)
+                    else:
+                        logging.warning(f"[[{symbol}]] Lingrid DEBUG DEBUG: Long Quantity {qty:.4f} at Price {price:.4f} below min_qty {min_qty:.4f}. Skipping this level.")
+
+                filtered_grid_levels_short = []
+                filtered_amounts_short = []
+                for price, qty in zip(grid_levels_short, amounts_short):
+                    if qty >= min_qty:
+                        filtered_grid_levels_short.append(price)
+                        filtered_amounts_short.append(qty)
+                    else:
+                        logging.warning(f"[[{symbol}]] Lingrid DEBUG DEBUG: Short Quantity {qty:.4f} at Price {price:.4f} below min_qty {min_qty:.4f}. Skipping this level.")
+
+                grid_levels_long = filtered_grid_levels_long
+                amounts_long = filtered_amounts_long
+                grid_levels_short = filtered_grid_levels_short
+                amounts_short = filtered_amounts_short
+
+                # Log filtered results using the helper function
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Filtered Long Grid Levels and Amounts:")
                 for i, (price, qty) in enumerate(zip(grid_levels_long, amounts_long), 1):
-                    dollar_value = qty * price
-                    logging.info(
-                        f"[[{symbol}]] Level {i} - Price: {price:.4f} USD, "
-                        f"Quantity: {qty:.4f} units, Dollar Value: ${dollar_value:.4f} USD"
-                    )
-                
-                # Log total quantities and dollar values for long grids using the helper function
-                self.log_total_grid_allocation(symbol, 'Long', grid_levels_long, amounts_long)
-                
-                logging.info(f"[[{symbol}]] Short Grid Orders:")
-                
+                    logging.info(f"[[{symbol}]] Lingrid DEBUG Level {i}: Price={price:.4f}, Quantity={qty:.4f}")
+
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Filtered Short Grid Levels and Amounts:")
                 for i, (price, qty) in enumerate(zip(grid_levels_short, amounts_short), 1):
-                    dollar_value = qty * price
-                    logging.info(
-                        f"[[{symbol}]] Level {i} - Price: {price:.4f} USD, "
-                        f"Quantity: {qty:.4f} units, Dollar Value: ${dollar_value:.4f} USD"
-                    )
-                
-                # Log total quantities and dollar values for short grids using the helper function
-                self.log_total_grid_allocation(symbol, 'Short', grid_levels_short, amounts_short)
+                    logging.info(f"[[{symbol}]] Lingrid DEBUG Level {i}: Price={price:.4f}, Quantity={qty:.4f}")
+
+                logging.info(f"[[{symbol}]] Lingrid DEBUG LONG levels: {grid_levels_long}, amounts: {amounts_long}")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG SHORT levels: {grid_levels_short}, amounts: {amounts_short}")
+
+                grid_levels_long = list(reversed(grid_levels_long))
+                amounts_long = list(reversed(amounts_long))               
+
+                grid_levels_short = list(reversed(grid_levels_short))
+                amounts_short = list(reversed(amounts_short))
+
+                logging.info(f"[[{symbol}]] Lingrid DEBUG LONG levels: {grid_levels_long}, "
+                             f"amounts: {amounts_long} (REVERSED)"
+                             )
+                logging.info(f"[[{symbol}]] Lingrid DEBUG SHORT levels: {grid_levels_short}, "
+                             f"amounts: {amounts_short} (REVERSED)" 
+                            )
+
+
+
+
+                # Log total allocations
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Total Long Grid Allocation: Quantity: {sum(amounts_long):.4f} units, Dollar Value: ${sum(qty * price for price, qty in zip(grid_levels_long, amounts_long)):.4f} USD")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Total Short Grid Allocation: Quantity: {sum(amounts_short):.4f} units, Dollar Value: ${sum(qty * price for price, qty in zip(grid_levels_short, amounts_short)):.4f} USD")
 
             else:
-                logging.info(f"[[{symbol}]] Applying standard grid behavior for {symbol}")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Applying standard grid behavior for {symbol}")
 
                 # Calculate the total amounts without aggressive or progressive drawdown behaviors
                 total_amount_long = self.calculate_total_amount_refactor(
@@ -3787,24 +3896,24 @@ class BybitStrategy(BaseStrategy):
                 )
 
                 # Enhanced Logging: Map grid levels to order quantities and their dollar values
-                logging.info(f"[[{symbol}]] Long Grid Orders:")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Long Grid Orders:")
                 
                 for i, (price, qty) in enumerate(zip(grid_levels_long, amounts_long), 1):
                     dollar_value = qty * price
                     logging.info(
-                        f"[[{symbol}]] Level {i} - Price: {price:.4f} USD, "
+                        f"[[{symbol}]] Lingrid DEBUG Level {i} - Price: {price:.4f} USD, "
                         f"Quantity: {qty:.4f} units, Dollar Value: ${dollar_value:.4f} USD"
                     )
                 
                 # Log total quantities and dollar values for long grids using the helper function
                 self.log_total_grid_allocation(symbol, 'Long', grid_levels_long, amounts_long)
                 
-                logging.info(f"[[{symbol}]] Short Grid Orders:")
+                logging.info(f"[[{symbol}]] Lingrid DEBUG Short Grid Orders:")
                 
                 for i, (price, qty) in enumerate(zip(grid_levels_short, amounts_short), 1):
                     dollar_value = qty * price
                     logging.info(
-                        f"[[{symbol}]] Level {i} - Price: {price:.4f} USD, "
+                        f"[[{symbol}]] Lingrid DEBUG Level {i} - Price: {price:.4f} USD, "
                         f"Quantity: {qty:.4f} units, Dollar Value: ${dollar_value:.4f} USD"
                     )
                 
@@ -3860,8 +3969,8 @@ class BybitStrategy(BaseStrategy):
             )
 
         except Exception as e:
-            logging.error(f"[[{symbol}]] Error in executing gridstrategy: {e}")
-            logging.error("[[{symbol}]] Traceback: %s", traceback.format_exc())
+            logging.error(f"[[{symbol}]] Lingrid DEBUG Error in executing gridstrategy: {e}")
+            logging.error(f"[[{symbol}]] Traceback: %s", traceback.format_exc())
 
 
     def get_spread_and_price(self, symbol):
@@ -4528,19 +4637,20 @@ class BybitStrategy(BaseStrategy):
                     ):
                         logging.info(f"[[{symbol}]]handle_grid Creating new long position based on MFIRSI long signal")
 
-                        # Use the new comprehensive check to ensure no double grids
+                        # Ensure there are no existing active grids
                         if not self.has_active_grid(symbol, 'long', open_orders):
                             self.clear_grid(symbol, 'buy')
 
                             # Make a copy of grid_levels_long to safely modify
                             modified_grid_levels_long = grid_levels_long.copy()
 
-                            # Set the first grid level to the best bid price for initial entry
-                            best_bid_price = self.get_best_bid_price(symbol)  # Fetch the latest best bid price
-                            logging.info(f"[[{symbol}]]handle_grid Setting first level of modified grid to best_bid_price: {best_bid_price:.4f} USD")
-                            modified_grid_levels_long[0] = best_bid_price
+                            # Only adjust the first level if no long position exists
+                            if not has_open_long_position:
+                                best_bid_price = self.get_best_bid_price(symbol)  # Fetch the latest best bid price
+                                logging.info(f"[[{symbol}]]handle_grid Setting first level of modified grid to best_bid_price: {best_bid_price:.4f} USD")
+                                modified_grid_levels_long[0] = best_bid_price
 
-                            # Issue the grid only once initially
+                            # Issue the grid orders
                             self.issue_grid_safely(symbol, 'long', modified_grid_levels_long, amounts_long, open_orders)
 
                             retry_counter = 0
@@ -4586,19 +4696,20 @@ class BybitStrategy(BaseStrategy):
                     ):
                         logging.info(f"[[{symbol}]]handle_grid Creating new short position based on MFIRSI short signal")
 
-                        # Use the new comprehensive check to ensure no double grids
+                        # Ensure there are no existing active grids
                         if not self.has_active_grid(symbol, 'short', open_orders):
                             self.clear_grid(symbol, 'sell')
 
                             # Make a copy of grid_levels_short to safely modify
                             modified_grid_levels_short = grid_levels_short.copy()
 
-                            # Set the first grid level to the best ask price for initial entry
-                            best_ask_price = self.get_best_ask_price(symbol)  # Fetch the latest best ask price
-                            logging.info(f"[[{symbol}]]handle_grid Setting first level of modified grid to best_ask_price: {best_ask_price:.4f} USD")
-                            modified_grid_levels_short[0] = best_ask_price
+                            # Only adjust the first level if no short position exists
+                            if not has_open_short_position:
+                                best_ask_price = self.get_best_ask_price(symbol)  # Fetch the latest best ask price
+                                logging.info(f"[[{symbol}]]handle_grid Setting first level of modified grid to best_ask_price: {best_ask_price:.4f} USD")
+                                modified_grid_levels_short[0] = best_ask_price
 
-                            # Issue the grid only once initially
+                            # Issue the grid orders
                             self.issue_grid_safely(symbol, 'short', modified_grid_levels_short, amounts_short, open_orders)
 
                             retry_counter = 0
@@ -6210,6 +6321,7 @@ class BybitStrategy(BaseStrategy):
     def issue_grid_orders(self, symbol: str, side: str, grid_levels: list, amounts: list, is_long: bool, filled_levels: set):
 
         logging.info(f"[[{symbol}]] Function issue_grid_orders called")
+        logging.info(f"[[{symbol}]] Values passed to function  passed: {grid_levels} and amounts: {amounts}")
         """
         Check the status of existing grid orders and place new orders for unfilled levels.
         """
@@ -6430,6 +6542,16 @@ class BybitStrategy(BaseStrategy):
         long_pos_qty: float = 0, 
         short_pos_qty: float = 0
     ) -> List[float]:
+        """
+        This updated function:
+        - Computes ideal allocations for all levels (notionals) based on strength.
+        - Attempts allocation from outermost level (levels-1) inward (0).
+        - Allocates up to requested notional per level.
+        - If not enough leftover for full allocation at a level, tries partial.
+        - If partial still doesn't meet min_qty after rounding, that level is skipped.
+        - Returns amounts aligned with the given levels order.
+        """
+
         logging.info(f"[[{symbol}]]calc_progress Function calculate_order_amounts_progressive_distribution called")
         logging.info(
             f"[[{symbol}]]calc_progress Calculating progressive drawdown order amounts for {symbol} "
@@ -6461,164 +6583,97 @@ class BybitStrategy(BaseStrategy):
 
         # If no leftover exposure, we can't allocate more
         if available_position_value <= 0:
-            logging.warning(f"[[{symbol}]]calc_progress No available exposure for {side_lower} side. Existing positions meet or exceed the limit.")
-            return []
+            logging.warning(f"[[{symbol}]]calc_progress No available exposure for {side_lower} side.")
+            return [0.0] * levels
 
         # Fetch minimum trade requirements (min_qty and min_notional)
         min_qty = self.get_min_qty(symbol)
         min_notional = self.min_notional(symbol)
         logging.debug(f"[[{symbol}]]calc_progress Minimum Quantity: {min_qty:.4f}, Minimum Notional: {min_notional:.4f} USD")
 
-        # Calculate distribution factors based on 'strength' for all levels assuming full max_position_value
-        # We do not scale by available_position_value. We consider the FULL max_position_value to determine the ideal allocation.
+        # Calculate distribution factors
         total_ratio = sum([(i + 1) ** strength for i in range(levels)])
         level_notional_factors = [(i + 1) ** strength / total_ratio for i in range(levels)]
         logging.info(f"[[{symbol}]]calc_progress Strength: {strength:.2f} for {side_lower} side; Level Notional Factors: {level_notional_factors}")
         logging.info(f"[[{symbol}]]calc_progress Current Price: {current_price:.4f} USD")
 
-        # Pre-calculate ideal full allocations for each level
-        # Level indexing: 0-based for code, but Level 1 is closest, Level N is furthest
-        # We'll allocate starting from the furthest (levels-1) to the closest (0)
+        # Ideal full allocations before leftover checks
+        ideal_notionals = [max_position_value * factor for factor in level_notional_factors]
+
+        # Initialize allocations
         amounts = [0.0] * levels
-        ideal_allocations = []
+        leftover = available_position_value
 
-        for i in range(levels):
-            # i=0 corresponds to Level 1 (closest), i=levels-1 corresponds to Level N (furthest)
-            # We want to process from furthest to closest, so let's just store them first
-            level_number = i + 1
-            ideal_notional = max_position_value * level_notional_factors[i]
-            ideal_qty = ideal_notional / current_price
-            # We expect naturally: Level 5 > Level 4 > ... > Level 1 due to factor ordering
-            # No progressive adjustments at runtime needed.
-            ideal_allocations.append((level_number, ideal_qty, ideal_notional))
-
-        # Reverse ideal_allocations to start allocating from furthest (last entry) to closest (first entry)
-        ideal_allocations.reverse()  # Now index 0 in this list = Level 5, index 1 = Level 4, etc.
-
-        cumulative_position_value = existing_position_value
-
-        logging.debug(
-            f"[[{symbol}]]calc_progress Starting progressive distribution allocation. "
-            f"Processing from furthest level (Level {levels}) down to closest (Level 1)."
+        logging.info(
+            f"[[{symbol}]]calc_progress Allocating from outer to inner. "
+            f"Outermost level index: {levels-1}, Innermost level index: 0."
         )
 
-        # Iterate from the furthest level to the closest:
-        # Example: for levels=5 -> Level 5 first, then 4, 3, 2, 1
         for i in reversed(range(levels)):
-            level_number = i + 1
-            logging.debug(f"[[{symbol}]]calc_progress Processing {side_lower} Level {level_number} (furthest first)")
-
-            # Ideal notional for this level if we had the full max_position_value available
-            level_notional = max_position_value * level_notional_factors[i]
-            quantity = level_notional / current_price
-            logging.debug(
-                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Ideal full allocation: Quantity={quantity:.8f} units "
-                f"(Notional: {level_notional:.4f} USD)"
-            )
-
-            # Progressive sizing logic:
-            # Furthest level: ensure not trivial compared to existing positions
-            if i == levels - 1:
-                required_quantity = (existing_position_value / current_price) + (level_number * qty_precision)
-                if quantity < required_quantity:
-                    logging.debug(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Increasing quantity from {quantity:.8f} to "
-                        f"{required_quantity:.8f} units for a meaningful progressive start."
-                    )
-                quantity = max(quantity, required_quantity)
-            else:
-                # Closer levels: ensure not smaller than the previously allocated (further) level
-                next_index = i + 1
-                if amounts[next_index] > 0 and quantity <= amounts[next_index]:
-                    adjusted_quantity = amounts[next_index] + (level_number * qty_precision)
-                    logging.debug(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number}: Adjusting quantity upward from {quantity:.8f} "
-                        f"to {adjusted_quantity:.8f} units to maintain progression."
-                    )
-                    quantity = adjusted_quantity
-
-            # Round to meet exchange precision and ensure at least min_qty
-            rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_qty)
-            final_notional = rounded_quantity * current_price
-            logging.debug(
-                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - After rounding: {rounded_quantity:.8f} units "
-                f"(Final Notional: {final_notional:.4f} USD)"
-            )
-
-            # Check if we have enough leftover exposure to allocate full final_notional
-            if cumulative_position_value + final_notional > max_position_value:
-                # Not enough leftover for full allocation; try partial allocation with whatever leftover remains
-                logging.warning(
-                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Full allocation exceeds max exposure. Attempting partial allocation."
-                )
-                remaining_exposure = max_position_value - cumulative_position_value
-
-                if remaining_exposure > 0:
-                    # Partial allocation attempt
-                    partial_qty = remaining_exposure / current_price
-                    partial_qty = max(round(partial_qty / qty_precision) * qty_precision, min_qty)
-                    partial_notional = partial_qty * current_price
-
-                    if partial_notional > 0 and (cumulative_position_value + partial_notional) <= max_position_value:
-                        # Even if partial_notional < min_notional, allocate as long as min_qty is met
-                        if partial_notional < min_notional:
-                            logging.warning(
-                                f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation is below min_notional, "
-                                f"but meets min_qty. Allocating partial anyway."
-                            )
-                        amounts[i] = partial_qty
-                        cumulative_position_value += partial_notional
+            requested_notional = ideal_notionals[i]
+            if leftover <= 0:
+                logging.info(f"[[{symbol}]]calc_progress No leftover exposure remaining. Skipping Level {i+1}.")
+                continue
+            
+            if leftover >= requested_notional:
+                # Allocate up to the requested notional
+                qty = requested_notional / current_price
+                # Floor the quantity to ensure it does not exceed leftover
+                rounded_qty = math.floor(qty / qty_precision) * qty_precision
+                
+                # Ensure rounded_qty meets min_qty
+                if rounded_qty >= min_qty:
+                    final_notional = rounded_qty * current_price
+                    # Double-check not exceeding leftover
+                    if final_notional <= leftover:
+                        amounts[i] = rounded_qty
+                        leftover -= final_notional
                         logging.info(
-                            f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Partial allocation: {partial_qty:.4f} units "
-                            f"(${partial_notional:.4f} USD)."
+                            f"[[{symbol}]]calc_progress {side_lower.capitalize()} Level {i+1} - Full allocation: {rounded_qty:.4f} units (${final_notional:.4f})"
                         )
                     else:
                         logging.warning(
-                            f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Even partial allocation not possible. Skipping this level."
+                            f"[[{symbol}]]calc_progress {side_lower.capitalize()} Level {i+1} allocation not possible without exceeding leftover. Skipping."
                         )
                 else:
                     logging.warning(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - No remaining exposure to allocate. Skipping this level."
+                        f"[[{symbol}]]calc_progress {side_lower.capitalize()} Level {i+1} allocation qty {rounded_qty:.4f} below min_qty {min_qty:.4f}. Skipping."
                     )
-                # Continue to next level without breaking, as we might still allocate leftover at closer levels
-                continue
             else:
-                # Full allocation possible
-                if final_notional < min_notional:
+                # Allocate as much as possible without exceeding leftover
+                partial_notional = leftover
+                partial_qty = partial_notional / current_price
+                # Round down to nearest qty_precision
+                partial_rounded_qty = math.floor(partial_qty / qty_precision) * qty_precision
+                
+                if partial_rounded_qty >= min_qty:
+                    final_partial_notional = partial_rounded_qty * current_price
+                    if final_partial_notional <= leftover:
+                        amounts[i] = partial_rounded_qty
+                        leftover -= final_partial_notional
+                        logging.info(
+                            f"[[{symbol}]]calc_progress {side_lower.capitalize()} Level {i+1} - Partial allocation: {partial_rounded_qty:.4f} units (${final_partial_notional:.4f})"
+                        )
+                    else:
+                        logging.warning(
+                            f"[[{symbol}]]calc_progress {side_lower.capitalize()} Level {i+1} partial allocation not possible without exceeding leftover. Skipping."
+                        )
+                else:
                     logging.warning(
-                        f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Final notional ${final_notional:.4f} "
-                        f"below min_notional ${min_notional:.4f}, but min_qty is met. Allocating anyway."
+                        f"[[{symbol}]]calc_progress {side_lower.capitalize()} Level {i+1} partial allocation qty {partial_rounded_qty:.4f} below min_qty {min_qty:.4f}. Skipping this level."
                     )
-
-                amounts[i] = rounded_quantity
-                cumulative_position_value += final_notional
-                logging.info(
-                    f"[[{symbol}]]calc_progress {side_lower} Level {level_number} - Allocated: {rounded_quantity:.4f} units "
-                    f"(${final_notional:.4f} USD)"
-                )
-                logging.info(
-                    f"[[{symbol}]]calc_progress {side_lower} Cumulative Position Value after allocating Level {level_number}: {cumulative_position_value:.4f} USD"
-                )
-
-        # After attempting all levels, determine any leftover that couldn't be allocated
-        remaining_allocation = (max_position_value - existing_position_value) - (cumulative_position_value - existing_position_value)
-        logging.info(
-            f"[[{symbol}]]calc_progress Allocation completed. Remaining Position Value after allocation: {remaining_allocation:.4f} USD"
-        )
-
-        logging.debug(
-            f"[[{symbol}]]calc_progress Final allocated amounts for {side_lower} side (Level 1 to Level {levels}): {amounts}"
-        )
-        logging.debug(
-            f"[[{symbol}]]calc_progress No reversal needed. The indexing of levels and amounts is preserved as intended."
-        )
-
-        # Just before returning:
-        amounts.reverse()  # Now the first element is Level 1 (closest), last is Level N (furthest)
-
+        
+        # Final check to ensure allocations do not exceed available_position_value
+        total_allocated = sum([qty * current_price for qty in amounts])
+        if total_allocated > available_position_value:
+            logging.error(
+                f"[[{symbol}]]calc_progress Total allocated notional (${total_allocated:.4f}) exceeds available position value (${available_position_value:.4f}). Adjusting allocations."
+            )
+            # Optionally, implement further adjustment logic here
+        
+        logging.debug(f"[[{symbol}]]calc_progress Final allocations: {amounts}")
+        
         return amounts
-
-
 
 
     def calculate_order_amounts_aggressive_drawdown(self, symbol: str, total_equity: float, 
