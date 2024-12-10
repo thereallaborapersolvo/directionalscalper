@@ -1070,6 +1070,7 @@ def fetch_updated_symbols(args, manager, whitelist=None):
 def log_symbol_details(strategy, symbols):
     logging.info(f"Potential symbols for {strategy}: {symbols}")
 
+
 init(autoreset=True)
 
 if __name__ == '__main__':
@@ -1183,22 +1184,6 @@ if __name__ == '__main__':
             match exchange_name.lower():
                 case 'bybit':
                     bybit_auto_rotation(args, market_maker, manager, symbols_allowed)
-                case 'bybit_spot':
-                    bybit_auto_rotation_spot(args, market_maker, manager, symbols_allowed)
-                case 'blofin':
-                    blofin_auto_rotation(args, market_maker, manager, symbols_allowed)
-                case 'hyperliquid':
-                    hyperliquid_auto_rotation(args, market_maker, manager, symbols_allowed)
-                case 'huobi':
-                    huobi_auto_rotation(args, manager, market_maker, symbols_allowed)
-                case 'bitget':
-                    bitget_auto_rotation(args, manager, market_maker, symbols_allowed)
-                case 'binance':
-                    binance_auto_rotation(args, manager, market_maker, symbols_allowed)
-                case 'mexc':
-                    mexc_auto_rotation(args, manager, market_maker, symbols_allowed)
-                case 'lbank':
-                    lbank_auto_rotation(args, manager, market_maker, symbols_allowed)
                 case _:
                     logging.warning(f"Auto-rotation not implemented for exchange: {exchange_name}")
 
