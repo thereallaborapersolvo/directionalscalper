@@ -1,3 +1,5 @@
+# manager.py
+
 from __future__ import annotations
 from threading import Thread, Lock
 
@@ -35,6 +37,9 @@ class Manager:
         asset_value_cache_life_seconds: int = 60,
         path: Path | None = None,
         url: str = "",
+        symbols_allowed: int = 2,  # Default value
+        symbols_allowed_long: int = 1,  # Default value
+        symbols_allowed_short: int = 1  # Default value
     ):
         self.exchange = exchange
         self.exchange_name = exchange_name
@@ -47,6 +52,11 @@ class Manager:
         
         self.path = path
         self.url = url
+
+        # Initialize symbol limits
+        self.symbols_allowed = symbols_allowed
+        self.symbols_allowed_long = symbols_allowed_long
+        self.symbols_allowed_short = symbols_allowed_short
 
         # Initialize the time when data was last checked
         self.last_checked = 0.0
