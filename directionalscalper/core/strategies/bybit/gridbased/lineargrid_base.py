@@ -6,6 +6,7 @@ import copy
 import pytz
 import threading
 import traceback
+import inspect
 from threading import Thread, Lock
 from datetime import datetime, timedelta
 
@@ -14,15 +15,27 @@ from directionalscalper.core.strategies.bybit.bybit_strategy import BybitStrateg
 from directionalscalper.core.strategies.base_strategy import BaseStrategy, shared_symbols_data
 from directionalscalper.core.exchanges.bybit import BybitExchange
 from directionalscalper.core.strategies.logger import Logger
-# from live_table_manager import shared_symbols_data
 from rate_limit import RateLimit
+
+# Initialize logger
 logging = Logger(logger_name="LinearGridBase", filename="LinearGridBase.log", stream=True)
 
+# Initialize symbol locks
 symbol_locks = {}
+symbol_locks_lock = Lock()  # Lock to protect access to symbol_locks
+
+# Initialize dashboard lock
+dashboard_lock = Lock()
+
+# Initialize shared data lock
+shared_data_lock = Lock()
 
 class LinearGridBaseFutures(BybitStrategy):
-    def __init__(self, exchange, manager, config, symbols_allowed=None, rotator_symbols_standardized=None, mfirsi_signal=None):
-        super().__init__(exchange, config, manager, symbols_allowed)
+    def __init__(self, exchange, manager, config, symbols_allowed_long=None, symbols_allowed_short=None, rotator_symbols_standardized=None, mfirsi_signal=None):
+        super().__init__(exchange, config, manager, symbols_allowed_long + symbols_allowed_short)
+        self.symbols_allowed_long = symbols_allowed_long
+        self.symbols_allowed_short = symbols_allowed_short
+        self.rotator_symbols_standardized = rotator_symbols_standardized
         self.rate_limiter = RateLimit(10, 1)
         self.general_rate_limiter = RateLimit(50, 1)
         self.order_rate_limiter = RateLimit(5, 1) 
@@ -44,8 +57,6 @@ class LinearGridBaseFutures(BybitStrategy):
         self._initialize_symbol_locks(rotator_symbols_standardized)
         self.register_existing_symbols()
 
-        # **No need to initialize grid_lock here since it's inherited from BybitStrategy**
-
     def register_existing_symbols(self):
         open_positions = self.exchange.get_all_open_positions_bybit()
         open_symbols = self.extract_symbols_from_positions_bybit(open_positions)
@@ -54,59 +65,114 @@ class LinearGridBaseFutures(BybitStrategy):
             self.can_trade_new_symbol(self.symbols_allowed, standardized_symbol)
 
     def _initialize_symbol_locks(self, symbols):
-        for symbol in symbols or []:
-            standardized_symbol = symbol.upper()
-            if standardized_symbol not in symbol_locks:
-                symbol_locks[standardized_symbol] = {'long': threading.Lock(), 'short': threading.Lock()}
+        with symbol_locks_lock:
+            for symbol in symbols or []:
+                standardized_symbol = symbol.upper()
+                if standardized_symbol not in symbol_locks:
+                    symbol_locks[standardized_symbol] = {'long': threading.Lock(), 'short': threading.Lock()}
+                    logging.debug(f"[[{symbol}]]: Initialized symbol locks.")
 
-    def run(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None, action=None):
+    def run(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None, action=None, thread_completed=None):
+        logging.info(f"Executing LinearGridBaseFutures strategy for {symbol} with action {action}")
         try:
             standardized_symbol = symbol.upper()
             logging.info(f"[[{symbol}]]: Standardized symbol: {standardized_symbol}")
             current_thread_id = threading.get_ident()
 
-            if standardized_symbol not in symbol_locks:
-                symbol_locks[standardized_symbol] = {'long': threading.Lock(), 'short': threading.Lock()}
+            # Initialize locks if not present
+            with symbol_locks_lock:
+                if standardized_symbol not in symbol_locks:
+                    symbol_locks[standardized_symbol] = {'long': threading.Lock(), 'short': threading.Lock()}
+                    logging.debug(f"[[{symbol}]]: Initialized symbol locks.")
 
-            if symbol_locks[standardized_symbol][action].acquire(blocking=False):
+            # Attempt to acquire the lock for the specific action
+            lock = symbol_locks[standardized_symbol].get(action)
+            if not lock:
+                logging.error(f"[[{symbol}]]: Invalid action '{action}'. Cannot acquire lock.")
+                return
+
+            if lock.acquire(blocking=False):
                 logging.info(f"[[{symbol}]]: Lock acquired for symbol {standardized_symbol} action {action} by thread {current_thread_id}")
                 try:
                     if action == "long":
+                        logging.debug(f"[[{symbol}]]: Initiating run_long_trades.")
                         self.run_long_trades(standardized_symbol, rotator_symbols_standardized, mfirsi_signal)
                     elif action == "short":
+                        logging.debug(f"[[{symbol}]]: Initiating run_short_trades.")
                         self.run_short_trades(standardized_symbol, rotator_symbols_standardized, mfirsi_signal)
+                    else:
+                        logging.warning(f"[[{symbol}]]: Received unknown action '{action}'. No trades executed.")
+                except Exception as e:
+                    logging.error(f"[[{symbol}]]: Exception during trade execution: {e}")
+                    logging.debug(traceback.format_exc())
                 finally:
-                    symbol_locks[standardized_symbol][action].release()
+                    lock.release()
                     logging.info(f"[[{symbol}]]: Lock released for symbol {standardized_symbol} action {action} by thread {current_thread_id}")
             else:
-                logging.info(f"[[{symbol}]]: Failed to acquire lock for symbol {standardized_symbol} action {action}")
+                logging.info(f"[[{symbol}]]: Failed to acquire lock for symbol {standardized_symbol} action {action}. Another thread might be handling it.")
+
+            # Check for thread completion signal
+            if thread_completed and thread_completed.is_set():
+                logging.info(f"[[{symbol}]]: Thread completion event set. Exiting run loop.")
+                return
+
         except Exception as e:
-            logging.error(f"Exception in run function: {e}")
+            logging.error(f"[[{symbol}]]: Exception in run function: {e}")
             logging.debug(traceback.format_exc())
+        finally:
+            # Ensure symbol is unregistered upon thread completion
+            self.unregister_symbol(symbol)
+            logging.info(f"[[{symbol}]]: Unregistered symbol upon thread completion.")
+            if thread_completed:
+                thread_completed.set()
 
     def run_long_trades(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None):
-        self.running_long = True
-        self.run_single_symbol(symbol, rotator_symbols_standardized, mfirsi_signal, "long")
+        logging.info(f"[[{symbol}]]: Starting run_long_trades.")
+        try:
+            self.running_long = True
+            self.run_single_symbol(symbol, rotator_symbols_standardized, mfirsi_signal, "long")
+            logging.info(f"[[{symbol}]]: Completed run_long_trades.")
+        except Exception as e:
+            logging.error(f"[[{symbol}]]: Exception in run_long_trades: {e}")
+            logging.debug(traceback.format_exc())
+            self.running_long = False
 
     def run_short_trades(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None):
-        self.running_short = True
-        self.run_single_symbol(symbol, rotator_symbols_standardized, mfirsi_signal, "short")
+        logging.info(f"[[{symbol}]]: Starting run_short_trades.")
+        try:
+            self.running_short = True
+            self.run_single_symbol(symbol, rotator_symbols_standardized, mfirsi_signal, "short")
+            logging.info(f"[[{symbol}]]: Completed run_short_trades.")
+        except Exception as e:
+            logging.error(f"[[{symbol}]]: Exception in run_short_trades: {e}")
+            logging.debug(traceback.format_exc())
+            self.running_short = False
+
 
     def run_single_symbol(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None, action=None):
         try:
+            # Automatically capture the caller name
+            stack = inspect.stack()
+            caller_name = stack[1].function
+
+            # Log the caller name and formatted call stack
+            logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} STARTED (line: {inspect.currentframe().f_lineno}) (called by {caller_name})")
+
+            
             logging.info(f"[[{symbol}]]: Starting to process symbol: {symbol}")
             logging.info(f"[[{symbol}]]: Initializing default values for symbol: {symbol}")
 
-            logging.info(f"[[{symbol}]]: Attempt to register the symbol for trading")
+            logging.info(f"[[{symbol}]]: Attempting to register the symbol for trading")
             # Attempt to register the symbol for trading
             if not self.can_trade_new_symbol(self.symbols_allowed, symbol):
                 logging.info(f"[[{symbol}]]: Cannot trade {symbol}; symbol limit reached.")
                 return  # Exit early as trading is not allowed
 
-
+            # Initialize position details
             previous_long_pos_qty = 0
             previous_short_pos_qty = 0
 
+            # Initialize variables
             min_qty = None
             current_price = None
             total_equity = None
@@ -126,7 +192,7 @@ class LinearGridBaseFutures(BybitStrategy):
             long_pos_price = None
             short_pos_price = None
 
-            # Initializing time trackers for less frequent API calls
+            # Initialize time trackers for less frequent API calls
             last_equity_fetch_time = 0
             equity_refresh_interval = 30  # 30 minutes in seconds
 
@@ -239,7 +305,7 @@ class LinearGridBaseFutures(BybitStrategy):
             # Hedge price diff
             price_difference_threshold = self.config.hedge_price_difference_threshold
                     
-            logging.info("Setting up exchange")
+            logging.info(f"[[{symbol}]]: Setting up exchange")
             self.exchange.setup_exchange_bybit(symbol)
 
             previous_one_minute_distance = None
@@ -257,8 +323,19 @@ class LinearGridBaseFutures(BybitStrategy):
             # else:
             #     logging.info(f"No recent trading activity for {symbol} in the last 24 hours")
 
+            logging.info(f"[[{symbol}]]: Setting up exchange")
+            self.exchange.setup_exchange_bybit(symbol)
+
+            # Loop control flags
+            self.running_short = True if action == "short" else False
+            self.running_long = True if action == "long" else False
+
+            logging.info(f"[[{symbol}]]: Starting main trading loop with action: {action}")
+
 
             while self.running_long or self.running_short:
+                logging.info(f"[[{symbol}]]: Entering main trading loop. running_long: {self.running_long}, running_short: {self.running_short}")
+
 
                 logging.info(f"[[{symbol}]]: Trading {symbol} in while loop in obstrategy with long: {self.running_long}")
                 logging.info(f"[[{symbol}]]: Trading {symbol} in while loop in obstrategy with short: {self.running_short}")
@@ -287,19 +364,19 @@ class LinearGridBaseFutures(BybitStrategy):
             
                 # Log which thread is running this part of the code
                 thread_id = threading.get_ident()
-                logging.info(f"[[{symbol}]]: [Thread ID: {thread_id}] In while true loop {symbol}")
+                logging.info(f"[[{symbol}]]: [Thread ID: {thread_id}] In while true loop {symbol} for action {action}")
 
-                # Fetch open symbols every loop
+                # Fetch open positions
                 open_position_data = self.retry_api_call(self.exchange.get_all_open_positions_bybit)
-
+                logging.debug(f"[[{symbol}]]: Open position data: {open_position_data}")
                 
-                #logging.info(f"Open position data for {symbol}: {open_position_data}")
-
+                # Process positions
                 position_details = {}
 
                 for position in open_position_data:
                     info = position.get('info', {})
-                    position_symbol = info.get('symbol', '').split(':')[0]  # Use a different variable name
+                    position_symbol = info.get('symbol', '').split(':')[0]
+                    logging.debug(f"[[{symbol}]]: Processing position for {position_symbol}")
 
                     # Ensure 'size', 'side', 'avgPrice', and 'liqPrice' keys exist in the info dictionary
                     if 'size' in info and 'side' in info and 'avgPrice' in info and 'liqPrice' in info:
@@ -314,22 +391,27 @@ class LinearGridBaseFutures(BybitStrategy):
                                 'long': {'qty': 0, 'avg_price': 0, 'liq_price': None}, 
                                 'short': {'qty': 0, 'avg_price': 0, 'liq_price': None}
                             }
+                            logging.debug(f"[[{symbol}]]: Initialized position details for {position_symbol}")
 
                         # Update the quantities, average prices, and liquidation prices based on the side of the position
                         if side == 'buy':
                             position_details[position_symbol]['long']['qty'] += size
                             position_details[position_symbol]['long']['avg_price'] = avg_price
                             position_details[position_symbol]['long']['liq_price'] = liq_price
+                            logging.debug(f"[[{symbol}]]: Updated long position - Qty: {position_details[position_symbol]['long']['qty']}, Avg Price: {avg_price}, Liq Price: {liq_price}")
                         elif side == 'sell':
                             position_details[position_symbol]['short']['qty'] += size
                             position_details[position_symbol]['short']['avg_price'] = avg_price
                             position_details[position_symbol]['short']['liq_price'] = liq_price
+                            logging.debug(f"[[{symbol}]]: Updated short position - Qty: {position_details[position_symbol]['short']['qty']}, Avg Price: {avg_price}, Liq Price: {liq_price}")
                     else:
                         logging.warning(f"[[{symbol}]]: Missing required keys in position info for {position_symbol}")
 
+                logging.info(f"[[{symbol}]]: Parsed position details: {position_details}")
+
                 open_symbols = self.extract_symbols_from_positions_bybit(open_position_data)
                 open_symbols = [symbol.replace("/", "") for symbol in open_symbols]
-                logging.info(f"[[{symbol}]]: Open symbols: {open_symbols}")
+                logging.info(f"Open symbols: {open_symbols}")
                 open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
                 #logging.info(f"Open symbols: {open_symbols}")
@@ -450,14 +532,14 @@ class LinearGridBaseFutures(BybitStrategy):
 
                 # moving_averages = self.get_all_moving_averages(symbol)
 
-                logging.info(f"[[{symbol}]]: Open symbols: {open_symbols}")
-                logging.info(f"[[{symbol}]]: Current rotator symbols: {rotator_symbols_standardized}")
+                logging.info(f"Open symbols: {open_symbols}")
+                logging.debug(f"Current rotator symbols: {rotator_symbols_standardized}")
                 symbols_to_manage = [s for s in open_symbols if s not in rotator_symbols_standardized]
-                logging.info(f"[[{symbol}]]: Symbols to manage {symbols_to_manage}")
+                logging.info(f"Symbols to manage {symbols_to_manage}")
                 
                 #logging.info(f"Open orders for {symbol}: {open_orders}")
 
-                logging.info(f"[[{symbol}]]: Symbols allowed: {self.symbols_allowed}")
+                logging.info(f"Symbols allowed: {self.symbols_allowed}")
 
                 trading_allowed = self.can_trade_new_symbol(self.symbols_allowed, symbol)
                 logging.info(f"[[{symbol}]]: Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
@@ -474,7 +556,7 @@ class LinearGridBaseFutures(BybitStrategy):
 
                 # self.print_trade_quantities_once_bybit(symbol, total_equity, best_ask_price)
 
-                logging.info(f"[[{symbol}]]: Rotator symbols standardized: {rotator_symbols_standardized}")
+                logging.debug(f"[[{symbol}]]: Rotator symbols standardized: {rotator_symbols_standardized}")
 
                 symbol_precision = self.exchange.get_symbol_precision_bybit(symbol)
 
@@ -608,7 +690,7 @@ class LinearGridBaseFutures(BybitStrategy):
 
                     logging.info(f"[[{symbol}]]: Rotator symbol trading: {symbol}")
                                 
-                    logging.info(f"[[{symbol}]]: Rotator symbols: {rotator_symbols_standardized}")
+                    logging.debug(f"[[{symbol}]]: Rotator symbols: {rotator_symbols_standardized}")
                     logging.info(f"[[{symbol}]]: Open symbols: {open_symbols}")
 
                     logging.info(f"[[{symbol}]]: Long pos qty {long_pos_qty} for {symbol}")
@@ -1115,3 +1197,35 @@ class LinearGridBaseFutures(BybitStrategy):
             logging.error(f"[[{symbol}]]: Exception caught in strategy '{symbol}': {e}\nTraceback:\n{traceback_info}")
             # Ensure the symbol is removed in case of unexpected errors
             self.unregister_symbol(symbol)
+        finally:
+            # Ensure symbol is unregistered if not already
+            self.unregister_symbol(symbol)
+            logging.info(f"[[{symbol}]]: Unregistered symbol upon thread completion.")
+
+    def update_shared_symbol_data(self, symbol, symbol_data):
+        with shared_data_lock:
+            shared_symbols_data[symbol] = symbol_data
+            logging.info(f"[[{symbol}]]: Shared symbol data updated.")
+
+    def update_dashboard(self, symbol_data):
+        with dashboard_lock:
+            try:
+                if os.path.exists(self.config.shared_data_path):
+                    dashboard_path = os.path.join(self.config.shared_data_path, "shared_data.json")
+                    with open(dashboard_path, "r") as file:
+                        data = json.load(file)
+                else:
+                    data = {}
+                    logging.warning("shared_data.json does not exist. Creating a new file.")
+
+                data[symbol_data['symbol']] = symbol_data
+
+                with open(dashboard_path, "w") as file:
+                    json.dump(data, file)
+                logging.info("Data saved to shared_data.json")
+            except FileNotFoundError:
+                logging.info(f"[[{symbol}]]: File not found: {dashboard_path}")
+            except IOError as e:
+                logging.error(f"[[{symbol}]]: I/O error occurred: {e}")
+            except Exception as e:
+                logging.error(f"[[{symbol}]]: An unexpected error occurred in saving json: {e}")

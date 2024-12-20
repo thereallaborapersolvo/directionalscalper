@@ -186,3 +186,9 @@ ZZZZZ.py
 
 logs/*.log
 logs/*.log.*
+configs/dirscalp04_config_AGGRV.json
+configs/dirscalp03_config.json
+configs/dirscalp02_config.json
+zzzzz_1.py
+z_prompt.md
+tree.txt
