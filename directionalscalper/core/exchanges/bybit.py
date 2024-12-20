@@ -9,6 +9,8 @@ from ccxt.base.errors import RateLimitExceeded, NetworkError
 import ccxt
 import traceback
 from directionalscalper.core.strategies.logger import Logger
+import inspect
+import traceback
 
 from rate_limit import RateLimit
 
@@ -348,6 +350,9 @@ class BybitExchange(Exchange):
             return None
         
     def create_tagged_limit_order_bybit(self, symbol: str, side: str, qty: float, price: float, positionIdx=0, isLeverage=False, orderLinkId=None, postOnly=True, params={}):
+        # Get the caller name
+        caller_name = inspect.stack()[1].function  # Get the name of the function that called this one
+        logging.info(f"[[{symbol}]] (called by {caller_name}) in function {inspect.currentframe().f_code.co_name}.")
         try:
             # Directly prepare the parameters required by the `create_order` method
             order_type = "limit"  # For limit orders
@@ -387,7 +392,8 @@ class BybitExchange(Exchange):
 
             return order
         except Exception as e:
-            logging.info(f"An error occurred in create_tagged_limit_order_bybit() for {symbol}: {e}")
+            # logging.info(f"An error occurred in create_tagged_limit_order_bybit() for {symbol}: {e}")
+            logging.info(f"(called by {caller_name}) An unknown error occurred in create_tagged_limit_order_bybit() for {symbol}: {e}\nTraceback: {traceback.format_exc()}")
             return {"error": str(e)}
 
         
