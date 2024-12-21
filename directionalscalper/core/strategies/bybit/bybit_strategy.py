@@ -4785,6 +4785,7 @@ class BybitStrategy(BaseStrategy):
             logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Fresh MFIRSI signal for [[{symbol}]]: {fresh_mfirsi_signal}")
 
             mfi_signal_short = fresh_mfirsi_signal.lower() == "short"
+            mfi_signal_long = fresh_mfirsi_signal.lower() == "long"
 
             logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) MFIRSI SIGNAL FOR [[{symbol}]]: {mfirsi_signal}")
 
@@ -4798,7 +4799,7 @@ class BybitStrategy(BaseStrategy):
                 dynamic_outer_price_distance_short=dynamic_outer_price_distance_short
             )
 
-            # Check if the symbol is in open_symbols and trading is allowed
+            # If symbol in open_symbols and trading allowed, consider additional entries
             if unique_open_symbols <= symbols_allowed or symbol in open_symbols:
                 fresh_signal = self.generate_l_signals(symbol)
 
@@ -5161,8 +5162,12 @@ class BybitStrategy(BaseStrategy):
                         logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Exception caught in placing entries: {e}")
                         logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Traceback: %s", traceback.format_exc())
 
+            # else:
+            #     logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Additional entries disabled from signal")
+
             else:
-                logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Additional entries disabled from signal")
+                logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Symbol not in open_symbols: {open_symbols} or trading not allowed")
+
 
             # Introduce a short delay before continuing
             time.sleep(5)
@@ -5289,7 +5294,7 @@ class BybitStrategy(BaseStrategy):
 
                             # Adjust the first grid level 0.5% above the best ask price
                             modified_grid_levels_short = grid_levels_short.copy()
-                            logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Modified grid levels long: {modified_grid_levels_short}")
+                            logging.info(f"[[{symbol}]] func:{inspect.currentframe().f_code.co_name} (line: {inspect.currentframe().f_lineno}) Modified grid levels short: {modified_grid_levels_short}")
  
                             # Removing this section - as I don't want bot to enter in position at bid price - it has to maintain preset grid levels
                             # best_ask_price = self.get_best_ask_price(symbol)
@@ -6613,8 +6618,16 @@ class BybitStrategy(BaseStrategy):
                 # Mark the grid as cleared
                 if side == 'buy':
                     self.grid_cleared_status[symbol]['long'] = True
+                    # <-- Added: Remove symbol from active_long_grids
+                    if symbol in self.active_long_grids:
+                        self.active_long_grids.discard(symbol)
+                        logging.info(f"[[{symbol}]] Removed from active_long_grids after clearing long grid.")
                 elif side == 'sell':
                     self.grid_cleared_status[symbol]['short'] = True
+                    # <-- Added: Remove symbol from active_short_grids
+                    if symbol in self.active_short_grids:
+                        self.active_short_grids.discard(symbol)
+                        logging.info(f"[[{symbol}]] Removed from active_short_grids after clearing short grid.")
 
                 break
             else:
@@ -6641,8 +6654,6 @@ class BybitStrategy(BaseStrategy):
         return unique_id[:45]  # Ensure the ID does not exceed 45 characters
 
     def issue_grid_orders(self, symbol: str, side: str, grid_levels: list, amounts: list, is_long: bool, filled_levels: set):
-
-
         # Get the caller name
         stack = inspect.stack()
         caller_name = stack[1].function  # Get the name of the function that called this one
@@ -6684,10 +6695,10 @@ class BybitStrategy(BaseStrategy):
 
             # Ensure all elements within grid_levels and amounts are of correct type
             for level in grid_levels:
-                assert isinstance(level, (float, int)), f"Each level in grid_levels should be a float or int, but got {type(level)}"
+                assert isinstance(level, (float, int)), f"Each level in grid_levels should be float or int, but got {type(level)}"
             
             for amount in amounts:
-                assert isinstance(amount, (float, int)), f"Each amount in amounts should be a float or int, but got {type(amount)}"
+                assert isinstance(amount, (float, int)), f"Each amount in amounts should be float or int, but got {type(amount)}"
 
             # Place new grid orders for unfilled levels
             for level, amount in zip(grid_levels, amounts):
@@ -6712,6 +6723,16 @@ class BybitStrategy(BaseStrategy):
                     logging.info(f"[[{symbol}]] Skipping {side} order at level {level} for symbol as it already exists.")
 
             logging.info(f"[[{symbol}]] {side.capitalize()} grid orders issued for unfilled levels.")
+
+            # <-- Added
+            # After successfully placing orders, add the symbol to the respective active grids set
+            if is_long:
+                self.active_long_grids.add(symbol)
+                logging.info(f"[[{symbol}]] Added to active_long_grids after issuing long grid orders.")
+            else:
+                self.active_short_grids.add(symbol)
+                logging.info(f"[[{symbol}]] Added to active_short_grids after issuing short grid orders.")
+
         except Exception as e:
             logging.error(f"[[{symbol}]] Exception in issue_grid_orders: {e}")
 
