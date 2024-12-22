@@ -1,6 +1,7 @@
 import uuid
 from .exchange import Exchange
 import logging
+import inspect
 import time
 import random
 from datetime import datetime, timedelta
@@ -348,12 +349,20 @@ class BybitExchange(Exchange):
             return None
         
     def create_tagged_limit_order_bybit(self, symbol: str, side: str, qty: float, price: float, positionIdx=0, isLeverage=False, orderLinkId=None, postOnly=True, params={}):
+
         try:
-            # Directly prepare the parameters required by the `create_order` method
+            # Capture inspection details
+            current_frame = inspect.currentframe()
+            caller_frame = inspect.getouterframes(current_frame, 2)
+            caller_function = caller_frame[1].function if len(caller_frame) > 1 else "Unknown"
+            current_function = current_frame.f_code.co_name
+            current_line = current_frame.f_lineno
+
+            # Define order type and time in force
             order_type = "limit"  # For limit orders
             time_in_force = "PostOnly" if postOnly else "GTC"
             
-            # Include additional parameters
+            # Prepare extra parameters
             extra_params = {
                 "positionIdx": positionIdx,
                 "timeInForce": time_in_force
@@ -366,6 +375,15 @@ class BybitExchange(Exchange):
             # Merge any additional user-provided parameters
             extra_params.update(params)
 
+            # Log the details of the order being placed with inspection info
+            logging.info(
+                f"(caller: {caller_function}, func: {current_function}, line: {current_line}) [[{symbol}]] "
+                f"Calling create_tagged_limit_order_bybit with symbol={symbol}, "
+                f"order_type={order_type}, side={side}, amount={qty}, price={price}, "
+                f"positionIdx={positionIdx}, isLeverage={isLeverage}, "
+                f"orderLinkId={orderLinkId}, postOnly={postOnly}, params={params}"
+            )
+
             # Create the order
             order = self.exchange.create_order(
                 symbol=symbol,
@@ -376,18 +394,41 @@ class BybitExchange(Exchange):
                 params=extra_params  # Pass extra params here
             )
 
+            # Log the response from the exchange with inspection info
+            logging.info(
+                f"(caller: {caller_function}, func: {current_function}, line: {current_line}) [[{symbol}]] "
+                f"Order placed successfully: {order}"
+            )
+
             # Log the time of order creation for side-specific tracking
             current_time = time.time()
             if side.lower() == 'buy':
                 self.last_active_long_order_time[symbol] = current_time
-                logging.info(f"Logged long order time for {symbol}")
+                logging.info(
+                    f"(caller: {caller_function}, func: {current_function}, line: {current_line}) [[{symbol}]] "
+                    f"Logged long order time for {symbol}"
+                )
             elif side.lower() == 'sell':
                 self.last_active_short_order_time[symbol] = current_time
-                logging.info(f"Logged short order time for {symbol}")
+                logging.info(
+                    f"(caller: {caller_function}, func: {current_function}, line: {current_line}) [[{symbol}]] "
+                    f"Logged short order time for {symbol}"
+                )
 
             return order
+
         except Exception as e:
-            logging.info(f"An error occurred in create_tagged_limit_order_bybit() for {symbol}: {e}")
+            # Capture inspection details for error logging
+            error_frame = inspect.currentframe()
+            error_caller_frame = inspect.getouterframes(error_frame, 2)
+            error_caller_function = error_caller_frame[1].function if len(error_caller_frame) > 1 else "Unknown"
+            error_current_function = error_frame.f_code.co_name
+            error_current_line = error_frame.f_lineno
+
+            logging.error(
+                f"(caller: {error_caller_function}, func: {error_current_function}, line: {error_current_line}) "
+                f"[{symbol}] An error occurred in create_tagged_limit_order_bybit() for {symbol}: {e}"
+            )
             return {"error": str(e)}
 
         
