@@ -353,7 +353,7 @@ class BybitStrategy(BaseStrategy):
         if symbol in self.last_activity_time:
             last_activity_time = self.last_activity_time[symbol]
             inactive_time = current_time - last_activity_time
-            logging.info(f"[{symbol}] ({side}) last active {inactive_time} seconds ago")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] ({side}) last active {inactive_time} seconds ago")
             if inactive_time >= inactive_time_threshold and previous_qty > 0:
                 logging.info(f"[{symbol}] ({side}) has been inactive for {inactive_time} seconds, exceeding threshold of {inactive_time_threshold} seconds")
                 if side == 'long':
@@ -367,17 +367,17 @@ class BybitStrategy(BaseStrategy):
                 return True
         else:
             self.last_activity_time[symbol] = current_time
-            logging.info(f"Recording initial activity time for [{symbol}] ({side})")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Recording initial activity time for [{symbol}] ({side})")
         return False
 
     def check_position_inactivity(self, symbol, inactive_pos_time_threshold, long_pos_qty, short_pos_qty, previous_long_pos_qty, previous_short_pos_qty):
         current_time = time.time()
-        logging.info(f"Checking position inactivity for [{symbol}] at {current_time}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Checking position inactivity for [{symbol}] at {current_time}")
 
         has_open_long_position = long_pos_qty > 0
         has_open_short_position = short_pos_qty > 0
 
-        logging.info(f"Open positions status for [{symbol}] - Long: {'found' if has_open_long_position else 'none'}, Short: {'found' if has_open_short_position else 'none'}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open positions status for [{symbol}] - Long: {'found' if has_open_long_position else 'none'}, Short: {'found' if has_open_short_position else 'none'}")
 
         # Determine inactivity and handle accordingly
         if not has_open_long_position:
@@ -631,13 +631,13 @@ class BybitStrategy(BaseStrategy):
         for order in mismatched_qty_orders:
             try:
                 self.exchange.cancel_order_by_id(order['id'], symbol)
-                logging.info(f"Cancelled TP order {order['id']} for update.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Cancelled TP order {order['id']} for update.")
             except Exception as e:
-                logging.info(f"Error in cancelling {order_side} TP order {order['id']}. Error: {e}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error in cancelling {order_side} TP order {order['id']}. Error: {e}")
 
         # Debug log to inspect the current time and last TP update time
         now = datetime.now()
-        logging.info(f"Inside update_quickscalp_tp_dynamic - Current time: {now}, TP update time before adjustment: {last_tp_update}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside update_quickscalp_tp_dynamic - Current time: {now}, TP update time before adjustment: {last_tp_update}")
 
         # Check if an update is needed based on the current time or if there were mismatched quantity orders
         if now >= last_tp_update or mismatched_qty_orders:
@@ -647,7 +647,7 @@ class BybitStrategy(BaseStrategy):
             # Set new TP order with updated prices only if no TP order exists
             if not tp_order_exists:
                 new_tp_price_min = new_long_tp_min if order_side == "sell" else new_short_tp_min
-                logging.info(f"New tp price min: {new_tp_price_min} with order side as {order_side}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] New tp price min: {new_tp_price_min} with order side as {order_side}")
                 new_tp_price_max = new_long_tp_max if order_side == "sell" else new_short_tp_max
                 current_price = self.exchange.get_current_price(symbol)
                 order_book = self.exchange.get_orderbook(symbol)
@@ -661,36 +661,36 @@ class BybitStrategy(BaseStrategy):
                         try:
                             tp_price = best_ask_price if order_side == "sell" else best_bid_price
                             self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, tp_price, positionIdx=positionIdx, reduce_only=True)
-                            logging.info(f"New {order_side.capitalize()} TP set at current/best price {tp_price} as current price has surpassed the max TP")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] New {order_side.capitalize()} TP set at current/best price {tp_price} as current price has surpassed the max TP")
                         except Exception as e:
-                            logging.info(f"Failed to set new {order_side} TP for [{symbol}] at current/best price. Error: {e}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to set new {order_side} TP for [{symbol}] at current/best price. Error: {e}")
                     else:
                         try:
                             self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_min, positionIdx=positionIdx, reduce_only=True)
-                            logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_min} using a normal limit order")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] New {order_side.capitalize()} TP set at {new_tp_price_min} using a normal limit order")
                         except Exception as e:
-                            logging.info(f"Failed to set new {order_side} TP for [{symbol}] using a normal limit order. Error: {e}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to set new {order_side} TP for [{symbol}] using a normal limit order. Error: {e}")
                 else:
                     try:
                         self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_max, positionIdx=positionIdx, reduce_only=True)
-                        logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_max} using a post-only order")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] New {order_side.capitalize()} TP set at {new_tp_price_max} using a post-only order")
                     except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for [{symbol}] using a post-only order. Error: {e}")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to set new {order_side} TP for [{symbol}] using a post-only order. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for [{symbol}]")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping TP update as a TP order already exists for [{symbol}]")
 
             # Ensure the next TP update time is set to the future
             if order_side == "sell":
                 self.next_long_tp_update = now + timedelta(seconds=15)  # Adjust time as per strategy needs
-                logging.info(f"Updated long TP time: {self.next_long_tp_update}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated long TP time: {self.next_long_tp_update}")
             else:
                 self.next_short_tp_update = now + timedelta(seconds=15)  # Adjust time as per strategy needs
-                logging.info(f"Updated short TP time: {self.next_short_tp_update}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated short TP time: {self.next_short_tp_update}")
 
             # Return the appropriate updated time
             return self.next_long_tp_update if order_side == "sell" else self.next_short_tp_update
         else:
-            logging.info(f"No immediate update needed for TP orders for [{symbol}]. Last update at: {last_tp_update}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No immediate update needed for TP orders for [{symbol}]. Last update at: {last_tp_update}")
             return last_tp_update
         
     def update_quickscalp_tp(self, symbol, pos_qty, upnl_profit_pct, short_pos_price, long_pos_price, positionIdx, order_side, last_tp_update, tp_order_counts, open_orders, max_retries=10):
@@ -752,18 +752,18 @@ class BybitStrategy(BaseStrategy):
 
     def calculate_quickscalp_long_take_profit_dynamic_distance(self, long_pos_price, symbol, min_upnl_profit_pct, max_upnl_profit_pct):
         if long_pos_price is None or long_pos_price <= 0:
-            logging.info(f"Invalid long position price for {symbol}: {long_pos_price}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid long position price for {symbol}: {long_pos_price}")
             return None, None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
-        logging.info(f"Price precision for [{symbol}]: {price_precision}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price precision for [{symbol}]: {price_precision}")
 
         # Calculate the minimum and maximum target profit prices
         min_target_profit_price = Decimal(long_pos_price) * (1 + Decimal(min_upnl_profit_pct))
         max_target_profit_price = Decimal(long_pos_price) * (1 + Decimal(max_upnl_profit_pct))
 
         # Log the raw calculated target profit prices before quantization
-        logging.info(f"Calculated raw TP values for {symbol} - Min TP: {min_target_profit_price}, Max TP: {max_target_profit_price}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated raw TP values for {symbol} - Min TP: {min_target_profit_price}, Max TP: {max_target_profit_price}")
 
         # Quantize the target profit prices
         try:
@@ -774,29 +774,29 @@ class BybitStrategy(BaseStrategy):
                 Decimal('1e-{}'.format(price_precision)), rounding=ROUND_HALF_UP
             )
         except InvalidOperation as e:
-            logging.info(f"Error when quantizing target_profit_prices for {symbol}. {e}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error when quantizing target_profit_prices for {symbol}. {e}")
             return None, None
 
         # Log the quantized TP values before returning
-        logging.info(f"Quantized TP values for {symbol} - Min TP: {float(min_target_profit_price)}, Max TP: {float(max_target_profit_price)}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Quantized TP values for {symbol} - Min TP: {float(min_target_profit_price)}, Max TP: {float(max_target_profit_price)}")
 
         # Return the minimum and maximum target profit prices as a tuple
         return float(min_target_profit_price), float(max_target_profit_price)
 
     def calculate_quickscalp_short_take_profit_dynamic_distance(self, short_pos_price, symbol, min_upnl_profit_pct, max_upnl_profit_pct):
         if short_pos_price is None or short_pos_price <= 0:
-            logging.info(f"Invalid short position price for {symbol}: {short_pos_price}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid short position price for {symbol}: {short_pos_price}")
             return None, None
 
         price_precision = int(self.exchange.get_price_precision(symbol))
-        logging.info(f"Price precision for [{symbol}]: {price_precision}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price precision for [{symbol}]: {price_precision}")
 
         # Calculate the minimum and maximum target profit prices
         min_target_profit_price = Decimal(short_pos_price) * (1 - Decimal(min_upnl_profit_pct))
         max_target_profit_price = Decimal(short_pos_price) * (1 - Decimal(max_upnl_profit_pct))
 
         # Log the raw calculated target profit prices before quantization
-        logging.info(f"Calculated raw TP values for {symbol} - Min TP: {min_target_profit_price}, Max TP: {max_target_profit_price}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated raw TP values for {symbol} - Min TP: {min_target_profit_price}, Max TP: {max_target_profit_price}")
 
         # Quantize the target profit prices
         try:
@@ -807,11 +807,11 @@ class BybitStrategy(BaseStrategy):
                 Decimal('1e-{}'.format(price_precision)), rounding=ROUND_HALF_UP
             )
         except InvalidOperation as e:
-            logging.info(f"Error when quantizing target_profit_prices for {symbol}. {e}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error when quantizing target_profit_prices for {symbol}. {e}")
             return None, None
 
         # Log the quantized TP values before returning
-        logging.info(f"Quantized TP values for {symbol} - Min TP: {float(min_target_profit_price)}, Max TP: {float(max_target_profit_price)}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Quantized TP values for {symbol} - Min TP: {float(min_target_profit_price)}, Max TP: {float(max_target_profit_price)}")
 
         # Return the minimum and maximum target profit prices as a tuple
         return float(min_target_profit_price), float(max_target_profit_price)
@@ -1536,7 +1536,7 @@ class BybitStrategy(BaseStrategy):
         market_data = self.get_market_data_with_retry(symbol, max_retries=max_retries, retry_delay=5)
 
         # Log the market data for debugging
-        logging.info(f"Market data for [{symbol}]: {market_data}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Market data for [{symbol}]: {market_data}")
 
         try:
             min_qty = float(market_data.get('min_qty', 1.0))  # Use min_qty directly
@@ -1577,8 +1577,8 @@ class BybitStrategy(BaseStrategy):
             long_entry_size = max(min_qty, round(long_entry_size))
             short_entry_size = max(min_qty, round(short_entry_size))
 
-            logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size} units")
-            logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size} units")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated long entry size for [{symbol}]: {long_entry_size} units")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated short entry size for [{symbol}]: {short_entry_size} units")
 
             return long_entry_size, short_entry_size
         except (TypeError, ValueError) as e:
@@ -1589,7 +1589,7 @@ class BybitStrategy(BaseStrategy):
         market_data = self.get_market_data_with_retry(symbol, max_retries=max_retries, retry_delay=5)
 
         # Log the market data for debugging
-        logging.info(f"Market data for [{symbol}]: {market_data}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Market data for [{symbol}]: {market_data}")
 
         try:
             min_qty = float(market_data.get('min_qty', 1.0))  # Use min_qty directly
@@ -1605,7 +1605,7 @@ class BybitStrategy(BaseStrategy):
 
             # Ensure values are non-zero and valid
             if total_equity <= 0 or best_ask_price <= 0 or best_bid_price <= 0:
-                logging.warning(f"Invalid values detected: total_equity={total_equity}, best_ask_price={best_ask_price}, best_bid_price={best_bid_price}")
+                logging.warning(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid values detected: total_equity={total_equity}, best_ask_price={best_ask_price}, best_bid_price={best_bid_price}")
                 return 0, 0  # Return zero values for long and short entry sizes
 
             # Calculate dynamic entry sizes based on risk parameters
@@ -1633,12 +1633,12 @@ class BybitStrategy(BaseStrategy):
             long_entry_size = max(min_qty, round(long_entry_size))
             short_entry_size = max(min_qty, round(short_entry_size))
 
-            logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size} units")
-            logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size} units")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated long entry size for [{symbol}]: {long_entry_size} units")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated short entry size for [{symbol}]: {short_entry_size} units")
 
             return long_entry_size, short_entry_size
         except (TypeError, ValueError) as e:
-            logging.error(f"Error occurred: {e}")
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error occurred: {e}")
             return 0, 0
 
     def calculate_dynamic_amounts(self, symbol, total_equity, best_ask_price, best_bid_price):
@@ -1662,14 +1662,14 @@ class BybitStrategy(BaseStrategy):
         max_equity_for_long_trade = total_equity * self.wallet_exposure_limit
         max_long_position_value = max_equity_for_long_trade * self.user_defined_leverage_long
 
-        logging.info(f"Max long pos value for [{symbol}] : {max_long_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Max long pos value for [{symbol}] : {max_long_position_value}")
 
         long_entry_size = max(max_long_position_value / best_ask_price, min_qty_usd_value / best_ask_price)
 
         max_equity_for_short_trade = total_equity * self.wallet_exposure_limit
         max_short_position_value = max_equity_for_short_trade * self.user_defined_leverage_short
 
-        logging.info(f"Max short pos value for [{symbol}] : {max_short_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Max short pos value for [{symbol}] : {max_short_position_value}")
         
         short_entry_size = max(max_short_position_value / best_bid_price, min_qty_usd_value / best_bid_price)
 
@@ -1682,8 +1682,8 @@ class BybitStrategy(BaseStrategy):
             long_entry_size_adjusted = round(long_entry_size, -int(math.log10(qty_precision)))
             short_entry_size_adjusted = round(short_entry_size, -int(math.log10(qty_precision)))
 
-        logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
-        logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
 
         return long_entry_size_adjusted, short_entry_size_adjusted
 
@@ -1724,14 +1724,14 @@ class BybitStrategy(BaseStrategy):
         max_equity_for_long_trade = total_equity * self.wallet_exposure_limit
         max_long_position_value = max_equity_for_long_trade * self.user_defined_leverage_long
 
-        logging.info(f"Max long pos value for [{symbol}] : {max_long_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Max long pos value for [{symbol}] : {max_long_position_value}")
 
         long_entry_size = max(max_long_position_value / best_ask_price, min_qty_long)
 
         max_equity_for_short_trade = total_equity * self.wallet_exposure_limit
         max_short_position_value = max_equity_for_short_trade * self.user_defined_leverage_short
 
-        logging.info(f"Max short pos value for [{symbol}] : {max_short_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Max short pos value for [{symbol}] : {max_short_position_value}")
         
         short_entry_size = max(max_short_position_value / best_bid_price, min_qty_short)
 
@@ -1740,8 +1740,8 @@ class BybitStrategy(BaseStrategy):
         long_entry_size_adjusted = round(long_entry_size, -int(math.log10(qty_precision)))
         short_entry_size_adjusted = round(short_entry_size, -int(math.log10(qty_precision)))
 
-        logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
-        logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
 
         return long_entry_size_adjusted, short_entry_size_adjusted
 
@@ -1768,14 +1768,14 @@ class BybitStrategy(BaseStrategy):
         max_equity_for_long_trade = total_equity * self.wallet_exposure_limit
         max_long_position_value = max_equity_for_long_trade * self.user_defined_leverage_long
 
-        logging.info(f"Max long pos value for [{symbol}] : {max_long_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Max long pos value for [{symbol}] : {max_long_position_value}")
 
         long_entry_size = max(max_long_position_value / best_ask_price, min_notional_value / best_ask_price)
 
         max_equity_for_short_trade = total_equity * self.wallet_exposure_limit
         max_short_position_value = max_equity_for_short_trade * self.user_defined_leverage_short
 
-        logging.info(f"Max short pos value for [{symbol}] : {max_short_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Max short pos value for [{symbol}] : {max_short_position_value}")
         
         short_entry_size = max(max_short_position_value / best_bid_price, min_notional_value / best_bid_price)
 
@@ -1784,8 +1784,8 @@ class BybitStrategy(BaseStrategy):
         long_entry_size_adjusted = round(long_entry_size, -int(math.log10(qty_precision)))
         short_entry_size_adjusted = round(short_entry_size, -int(math.log10(qty_precision)))
 
-        logging.info(f"Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
-        logging.info(f"Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated long entry size for [{symbol}]: {long_entry_size_adjusted} units")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated short entry size for [{symbol}]: {short_entry_size_adjusted} units")
 
         return long_entry_size_adjusted, short_entry_size_adjusted
 
@@ -4978,6 +4978,9 @@ class BybitStrategy(BaseStrategy):
             return position_details.get(symbol, {}).get('short', {}).get('qty', 0)
         return 0
 
+    # ======================================================
+    # MAIN FUNCTION HERE is "lineargrid_base" as per below:
+    # ======================================================
     def lineargrid_base(self, symbol: str, open_symbols: list, total_equity: float, long_pos_price: float,
                         short_pos_price: float, long_pos_qty: float, short_pos_qty: float, levels: int,
                         strength: float, min_outer_price_distance: float, max_outer_price_distance_long: float, max_outer_price_distance_short: float, reissue_threshold: float, 
@@ -4996,13 +4999,13 @@ class BybitStrategy(BaseStrategy):
             try:
                 long_pos_qty = float(long_pos_qty)
             except (ValueError, TypeError) as e:
-                logging.error(f"Invalid value for long_pos_qty: {long_pos_qty}, Error: {e}")
+                logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid value for long_pos_qty: {long_pos_qty}, Error: {e}")
                 long_pos_qty = 0
 
             try:
                 short_pos_qty = float(short_pos_qty)
             except (ValueError, TypeError) as e:
-                logging.error(f"Invalid value for short_pos_qty: {short_pos_qty}, Error: {e}")
+                logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid value for short_pos_qty: {short_pos_qty}, Error: {e}")
                 short_pos_qty = 0
 
             spread, current_price = self.get_spread_and_price(symbol)
@@ -5018,8 +5021,8 @@ class BybitStrategy(BaseStrategy):
             self.initialize_filled_levels(symbol)
             long_grid_active, short_grid_active = self.check_grid_active(symbol, open_orders)
 
-            logging.info(f"Long grid active: {long_grid_active}")
-            logging.info(f"Short grid active: {short_grid_active}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long grid active: {long_grid_active}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short grid active: {short_grid_active}")
 
             self.check_and_manage_positions(
                 long_pos_qty,
@@ -5117,7 +5120,7 @@ class BybitStrategy(BaseStrategy):
 
             # Apply drawdown behavior based on configuration
             if drawdown_behavior == "full_distribution":
-                logging.info(f"Activating full distribution drawdown behavior for [{symbol}]")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Activating full distribution drawdown behavior for [{symbol}]")
 
                 # Calculate order amounts for aggressive drawdown with strength
                 amounts_long = self.calculate_order_amounts_aggressive_drawdown(
@@ -5132,7 +5135,7 @@ class BybitStrategy(BaseStrategy):
                 )
 
             elif drawdown_behavior == "progressive_drawdown":
-                logging.info(f"Activating progressive drawdown behavior for {symbol}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Activating progressive drawdown behavior for {symbol}")
 
                 # Calculate order amounts for progressive drawdown using progressive distribution
                 amounts_long = self.calculate_order_amounts_progressive_distribution(
@@ -5147,7 +5150,7 @@ class BybitStrategy(BaseStrategy):
                 )
 
             else:
-                logging.info(f"Applying standard grid behavior for {symbol}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Applying standard grid behavior for {symbol}")
 
                 # Calculate the total amounts without aggressive or progressive drawdown behaviors
                 total_amount_long = self.calculate_total_amount_refactor(
@@ -5253,17 +5256,16 @@ class BybitStrategy(BaseStrategy):
             )
 
         except Exception as e:
-            logging.error(f"Error in executing gridstrategy: {e}")
-            logging.error("Traceback: %s", traceback.format_exc())
-
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error in executing gridstrategy: {e}")
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Traceback: %s", traceback.format_exc())
 
 
     def get_spread_and_price(self, symbol):
         spread = self.get_4h_candle_spread(symbol)
-        logging.info(f"4h Candle spread for [{symbol}]: {spread}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] 4h Candle spread: {spread}")
 
         current_price = self.exchange.get_current_price(symbol)
-        logging.info(f"[{symbol}] Current price: {current_price}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Current price: {current_price}")
 
         return spread, current_price
 
@@ -5271,8 +5273,8 @@ class BybitStrategy(BaseStrategy):
         dynamic_outer_price_distance_long = max(min_outer_price_distance, min(max_outer_price_distance_long, spread))
         dynamic_outer_price_distance_short = max(min_outer_price_distance, min(max_outer_price_distance_short, spread))
         
-        logging.info(f"Dynamic outer price distance (Long): {dynamic_outer_price_distance_long}")
-        logging.info(f"Dynamic outer price distance (Short): {dynamic_outer_price_distance_short}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [symbol] Dynamic outer price distance (Long): {dynamic_outer_price_distance_long}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [symbol] Dynamic outer price distance (Short): {dynamic_outer_price_distance_short}")
         
         return dynamic_outer_price_distance_long, dynamic_outer_price_distance_short
 
@@ -5281,14 +5283,14 @@ class BybitStrategy(BaseStrategy):
             self.filled_levels[symbol] = {"buy": set(), "sell": set()}
 
     def check_grid_active(self, symbol, open_orders):
-        logging.info(f"Checking grid active for {symbol}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Checking grid active for {symbol}")
         #logging.info(f"Open orders test: {open_orders}")
         # Check for grid replacement conditions
         has_open_long_order = any(order['info']['symbol'] == symbol and order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
         has_open_short_order = any(order['info']['symbol'] == symbol and order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)
 
-        logging.info(f"{symbol} Has open long order check_grid_active: {has_open_long_order}")
-        logging.info(f"{symbol} Has open short order check_grid_active: {has_open_short_order}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Has open long order check_grid_active: {has_open_long_order}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Has open short order check_grid_active: {has_open_short_order}")
 
         long_grid_active = symbol in self.active_long_grids and has_open_long_order
         short_grid_active = symbol in self.active_short_grids and has_open_short_order
@@ -5302,7 +5304,7 @@ class BybitStrategy(BaseStrategy):
     def calculate_buffer_distances(self, current_price, buffer_percentage_long, buffer_percentage_short):
         buffer_distance_long = current_price * buffer_percentage_long
         buffer_distance_short = current_price * buffer_percentage_short
-        logging.info(f"Long buffer distance: {buffer_distance_long}, Short buffer distance: {buffer_distance_short}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long buffer distance: {buffer_distance_long}, Short buffer distance: {buffer_distance_short}")
         return buffer_distance_long, buffer_distance_short
 
     def get_order_book_prices(self, symbol, current_price):
@@ -5448,10 +5450,10 @@ class BybitStrategy(BaseStrategy):
         adjusted_grid_levels_long = sorted(adjusted_grid_levels_long, reverse=True)
         adjusted_grid_levels_short = sorted(adjusted_grid_levels_short)
 
-        logging.info(f"Initial long entry level: {initial_entry_long}")
-        logging.info(f"Initial short entry level: {initial_entry_short}")
-        logging.info(f"Long grid levels: {adjusted_grid_levels_long}")
-        logging.info(f"Short grid levels: {adjusted_grid_levels_short}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [symbol] Initial long entry level: {initial_entry_long}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [symbol] Initial short entry level: {initial_entry_short}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [symbol] Long grid levels: {adjusted_grid_levels_long}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [symbol] Short grid levels: {adjusted_grid_levels_short}")
 
         return adjusted_grid_levels_long, adjusted_grid_levels_short
 
@@ -5459,7 +5461,7 @@ class BybitStrategy(BaseStrategy):
     def get_precision_and_min_qty(self, symbol):
         qty_precision = self.exchange.get_symbol_precision_bybit(symbol)[1]
         min_qty = float(self.get_market_data_with_retry(symbol, max_retries=100, retry_delay=5)["min_qty"])
-        logging.info(f"Quantity precision: {qty_precision}, Minimum quantity: {min_qty}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Quantity precision: {qty_precision}, Minimum quantity: {min_qty}")
         return qty_precision, min_qty
 
     def calculate_total_amount_refactor(self, symbol, total_equity, best_ask_price, best_bid_price, 
@@ -5604,11 +5606,11 @@ class BybitStrategy(BaseStrategy):
 
             # Reset initial entry prices if positions have closed
             if long_position_closed:
-                logging.info(f"[{symbol}] Long position closed. Resetting initial entry price for long.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position closed. Resetting initial entry price for long.")
                 self.previous_position_state[symbol]['long_initial_entry'] = None
             
             if short_position_closed:
-                logging.info(f"[{symbol}] Short position closed. Resetting initial entry price for short.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position closed. Resetting initial entry price for short.")
                 self.previous_position_state[symbol]['short_initial_entry'] = None
 
             # Update position state tracking
@@ -5618,48 +5620,48 @@ class BybitStrategy(BaseStrategy):
             # Set initial entry price when a position is opened
             if has_open_long_position and not self.previous_position_state[symbol]['long_initial_entry']:
                 self.previous_position_state[symbol]['long_initial_entry'] = long_pos_price
-                logging.info(f"[{symbol}] Long position opened. Recording initial entry price for stop-loss: {long_pos_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position opened. Recording initial entry price for stop-loss: {long_pos_price}")
 
             if has_open_short_position and not self.previous_position_state[symbol]['short_initial_entry']:
                 self.previous_position_state[symbol]['short_initial_entry'] = short_pos_price
-                logging.info(f"[{symbol}] Short position opened. Recording initial entry price for stop-loss: {short_pos_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position opened. Recording initial entry price for stop-loss: {short_pos_price}")
 
             # Handle stop-loss logic using the initial entry prices
             if stop_loss_enabled:
                 stop_loss_price_long = self.previous_position_state[symbol]['long_initial_entry'] * (1 - stop_loss_long / 100) if has_open_long_position else None
                 stop_loss_price_short = self.previous_position_state[symbol]['short_initial_entry'] * (1 + stop_loss_short / 100) if has_open_short_position else None
 
-                logging.info(f"[{symbol}] Calculated stop-loss prices: Long - {stop_loss_price_long}, Short - {stop_loss_price_short}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculated stop-loss prices: Long - {stop_loss_price_long}, Short - {stop_loss_price_short}")
 
                 # Long position stop-loss check
                 if has_open_long_position:
-                    logging.info(f"[{symbol}] Long Position Quantity: {long_pos_qty}, Entry Price: {long_pos_price}, Stop-Loss Price: {stop_loss_price_long}")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long Position Quantity: {long_pos_qty}, Entry Price: {long_pos_price}, Stop-Loss Price: {stop_loss_price_long}")
                     if current_price <= stop_loss_price_long:
-                        logging.info(f"[{symbol}] Long position hit stop-loss at {stop_loss_price_long}. Triggering stop-loss.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position hit stop-loss at {stop_loss_price_long}. Triggering stop-loss.")
                         self.trigger_stop_loss(symbol, long_pos_qty, 'long', stop_loss_price_long, best_bid_price)
 
                 # Short position stop-loss check
                 if has_open_short_position:
-                    logging.info(f"[{symbol}] Short Position Quantity: {short_pos_qty}, Entry Price: {short_pos_price}, Stop-Loss Price: {stop_loss_price_short}")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short Position Quantity: {short_pos_qty}, Entry Price: {short_pos_price}, Stop-Loss Price: {stop_loss_price_short}")
                     if current_price >= stop_loss_price_short:
-                        logging.info(f"[{symbol}] Short position hit stop-loss at {stop_loss_price_short}. Triggering stop-loss.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position hit stop-loss at {stop_loss_price_short}. Triggering stop-loss.")
                         self.trigger_stop_loss(symbol, short_pos_qty, 'short', stop_loss_price_short, best_ask_price)
             else:
-                logging.info(f"Stop-loss disabled")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Stop-loss disabled")
 
             # Fetch open symbols for long and short positions
             open_symbols_long = self.get_open_symbols_long(open_position_data)
             open_symbols_short = self.get_open_symbols_short(open_position_data)
 
-            logging.info(f"Open symbols long: {open_symbols_long}")
-            logging.info(f"Open symbols short: {open_symbols_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbols long: {open_symbols_long}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbols short: {open_symbols_short}")
 
             # Number of open symbols for long and short positions
             length_of_open_symbols_long = len(open_symbols_long)
             length_of_open_symbols_short = len(open_symbols_short)
 
-            logging.info(f"Length of open symbols long: {length_of_open_symbols_long}")
-            logging.info(f"Length of open symbols short: {length_of_open_symbols_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Length of open symbols long: {length_of_open_symbols_long}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Length of open symbols short: {length_of_open_symbols_short}")
 
             # Combine open symbols from both long and short positions
             all_open_symbols = open_symbols_long + open_symbols_short
@@ -5667,24 +5669,24 @@ class BybitStrategy(BaseStrategy):
             # Count unique open symbols across both long and short positions
             unique_open_symbols = len(set(all_open_symbols))
 
-            logging.info(f"Unique open symbols: {unique_open_symbols}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Unique open symbols: {unique_open_symbols}")
 
             should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(
                 symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
 
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 #self.active_long_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 #self.active_short_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for short position on [{symbol}] is not active")
 
             # Initialize last_empty_grid_time for symbol if not present
             if symbol not in self.last_empty_grid_time:
@@ -5694,13 +5696,13 @@ class BybitStrategy(BaseStrategy):
             # has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
             # has_open_short_order = any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)
 
-            logging.info(f"Symbol format: {symbol}")
-            logging.info(f"Test open orders: {open_orders}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol format: {symbol}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Test open orders: {open_orders}")
             has_open_long_order = any(order['info']['symbol'] == symbol and order['info']['side'].lower() == 'buy' and not order['info']['reduceOnly'] for order in open_orders)
             has_open_short_order = any(order['info']['symbol'] == symbol and order['info']['side'].lower() == 'sell' and not order['info']['reduceOnly'] for order in open_orders)
 
-            logging.info(f"{symbol} Has open long order: {has_open_long_order}")
-            logging.info(f"{symbol} Has open short order: {has_open_short_order}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Has open long order: {has_open_long_order}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Has open short order: {has_open_short_order}")
 
             replace_empty_long_grid = (long_pos_qty > 0 and not has_open_long_order)
             replace_empty_short_grid = (short_pos_qty > 0 and not has_open_short_order)
@@ -5709,24 +5711,24 @@ class BybitStrategy(BaseStrategy):
 
             # Check and log if the symbol is in max_qty_reached_symbol_long or short
             if symbol in self.max_qty_reached_symbol_long:
-                logging.info(f"[{symbol}] Symbol is in max_qty_reached_symbol_long")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol is in max_qty_reached_symbol_long")
             if symbol in self.max_qty_reached_symbol_short:
-                logging.info(f"[{symbol}] Symbol is in max_qty_reached_symbol_short")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol is in max_qty_reached_symbol_short")
 
             # Additional logic for managing open symbols and checking trading permissions
             open_symbols = list(set(all_open_symbols))
-            logging.info(f"Open symbols: {open_symbols}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbols: {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             fresh_mfirsi_signal = self.generate_l_signals(symbol)
-            logging.info(f"Fresh MFIRSI signal for [{symbol}]: {fresh_mfirsi_signal}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Fresh MFIRSI signal for [{symbol}]: {fresh_mfirsi_signal}")
             mfi_signal_long = fresh_mfirsi_signal == "long"
             mfi_signal_short = fresh_mfirsi_signal == "short"
 
-            logging.info(f"MFIRSI SIGNAL FOR [{symbol}]: {mfirsi_signal}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] MFIRSI SIGNAL FOR [{symbol}]: {mfirsi_signal}")
 
             def issue_grid_safely(symbol: str, side: str, grid_levels: list, amounts: list):
                 with grid_lock:  # Lock to ensure no simultaneous grid issuance
@@ -5737,7 +5739,7 @@ class BybitStrategy(BaseStrategy):
 
                         # Use has_active_grid to check if a grid is already active for this symbol and side
                         if self.has_active_grid(symbol, side, open_orders):  # Calls the local function inside handle_grid_trades
-                            logging.warning(f"[{symbol}] {side.capitalize()} grid already active or existing open order detected. Skipping grid issuance.")
+                            logging.warning(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side.capitalize()} grid already active or existing open order detected. Skipping grid issuance.")
                             return  # Exit if the grid is already active or an open order exists
 
                         assert isinstance(grid_levels, list), f"Expected grid_levels to be a list, but got {type(grid_levels)}"
@@ -5747,15 +5749,15 @@ class BybitStrategy(BaseStrategy):
                         assert isinstance(amounts, list), f"Expected amounts to be a list, but got {type(amounts)}"
 
                         if self.grid_cleared_status.get(symbol, {}).get(side, False):
-                            logging.info(f"[{symbol}] Issuing new {side} grid orders.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Issuing new {side} grid orders.")
                             self.grid_cleared_status[symbol][side] = False  # Reset grid cleared status
                             self.issue_grid_orders(symbol, order_side, grid_levels, amounts, side == 'long', self.filled_levels[symbol][order_side])
                             grid_set.add(symbol)  # Add symbol to the active grid set
-                            logging.info(f"[{symbol}] Successfully issued {side} grid orders.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Successfully issued {side} grid orders.")
                         else:
-                            logging.warning(f"[{symbol}] Attempted to issue {side} grid orders, but grid clearance not confirmed. Skipping grid creation.")
+                            logging.warning(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Attempted to issue {side} grid orders, but grid clearance not confirmed. Skipping grid creation.")
                     except Exception as e:
-                        logging.error(f"Exception in issue_grid_safely for {symbol} - {side}: {e}")
+                        logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception in issue_grid_safely for {symbol} - {side}: {e}")
 
             replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                 symbol, 
@@ -5771,9 +5773,9 @@ class BybitStrategy(BaseStrategy):
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
-            logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
             if unique_open_symbols <= symbols_allowed or symbol in open_symbols:
                 fresh_signal = self.generate_l_signals(symbol)
@@ -5783,7 +5785,7 @@ class BybitStrategy(BaseStrategy):
                     if (fresh_signal.lower() == "long" and long_mode and not has_open_long_position 
                         and not graceful_stop_long and not self.has_active_grid(symbol, 'long', open_orders) and symbol not in self.max_qty_reached_symbol_long):
                         
-                        logging.info(f"[{symbol}] Creating new long position based on MFIRSI long signal")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Creating new long position based on MFIRSI long signal")
 
                         # Use the new comprehensive check to ensure no double grids
                         if not self.has_active_grid(symbol, 'long', open_orders):
@@ -5794,7 +5796,7 @@ class BybitStrategy(BaseStrategy):
 
                             # Set the first grid level to the best bid price for initial entry
                             best_bid_price = self.get_best_bid_price(symbol)  # Fetch the latest best bid price
-                            logging.info(f"[{symbol}] Setting first level of modified grid to best_bid_price: {best_bid_price}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Setting first level of modified grid to best_bid_price: {best_bid_price}")
                             modified_grid_levels_long[0] = best_bid_price
 
                             # Issue the grid only once initially
@@ -5809,26 +5811,26 @@ class BybitStrategy(BaseStrategy):
                                 try:
                                     long_pos_qty = self.get_position_qty(symbol, 'long')  # Re-fetch the long position quantity
                                 except Exception as e:
-                                    logging.error(f"[{symbol}] Error fetching long position quantity: {e}")
+                                    logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error fetching long position quantity: {e}")
                                     break
 
                                 retry_counter += 1
-                                logging.info(f"[{symbol}] Long position quantity after waiting: {long_pos_qty}, retry attempt: {retry_counter}")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position quantity after waiting: {long_pos_qty}, retry attempt: {retry_counter}")
 
                                 # Retry placing the grid every 10 retries (every 30 seconds)
                                 if retry_counter % 10 == 0 and long_pos_qty < 0.00001:
-                                    logging.info(f"[{symbol}] Retrying long grid orders due to MFIRSI signal long after {retry_counter} retries.")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Retrying long grid orders due to MFIRSI signal long after {retry_counter} retries.")
                                     
                                     # Fetch the latest best bid price before retrying
                                     best_bid_price = self.get_best_bid_price(symbol)
-                                    logging.info(f"[{symbol}] Updated best bid price on retry: {best_bid_price}")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated best bid price on retry: {best_bid_price}")
                                     
                                     # Clear and re-issue the grid with updated best bid price
                                     self.clear_grid(symbol, 'buy')
                                     modified_grid_levels_long[0] = best_bid_price
                                     issue_grid_safely(symbol, 'long', modified_grid_levels_long, amounts_long)
 
-                            logging.info(f"[{symbol}] Long position filled or max retries reached, exiting loop.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position filled or max retries reached, exiting loop.")
                             self.last_signal_time[symbol] = current_time
                             self.last_mfirsi_signal[symbol] = "neutral"  # Reset to neutral after processing
 
@@ -5836,7 +5838,7 @@ class BybitStrategy(BaseStrategy):
                     elif (fresh_signal.lower() == "short" and short_mode and not has_open_short_position 
                         and not graceful_stop_short and not self.has_active_grid(symbol, 'short', open_orders) and symbol not in self.max_qty_reached_symbol_short):
                         
-                        logging.info(f"[{symbol}] Creating new short position based on MFIRSI short signal")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Creating new short position based on MFIRSI short signal")
 
                         # Use the new comprehensive check to ensure no double grids
                         if not self.has_active_grid(symbol, 'short', open_orders):
@@ -5847,7 +5849,7 @@ class BybitStrategy(BaseStrategy):
 
                             # Set the first grid level to the best ask price for initial entry
                             best_ask_price = self.get_best_ask_price(symbol)  # Fetch the latest best ask price
-                            logging.info(f"[{symbol}] Setting first level of modified grid to best_ask_price: {best_ask_price}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Setting first level of modified grid to best_ask_price: {best_ask_price}")
                             modified_grid_levels_short[0] = best_ask_price
 
                             # Issue the grid only once initially
@@ -5862,41 +5864,41 @@ class BybitStrategy(BaseStrategy):
                                 try:
                                     short_pos_qty = self.get_position_qty(symbol, 'short')  # Re-fetch the short position quantity
                                 except Exception as e:
-                                    logging.error(f"[{symbol}] Error fetching short position quantity: {e}")
+                                    logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error fetching short position quantity: {e}")
                                     break
 
                                 retry_counter += 1
-                                logging.info(f"[{symbol}] Short position quantity after waiting: {short_pos_qty}, retry attempt: {retry_counter}")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position quantity after waiting: {short_pos_qty}, retry attempt: {retry_counter}")
 
                                 # Retry placing the grid every 10 retries (every 50 seconds)
                                 if retry_counter % 10 == 0 and short_pos_qty < 0.00001:
-                                    logging.info(f"[{symbol}] Retrying short grid orders due to MFIRSI signal short after {retry_counter} retries.")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Retrying short grid orders due to MFIRSI signal short after {retry_counter} retries.")
                                     
                                     # Fetch the latest best ask price before retrying
                                     best_ask_price = self.get_best_ask_price(symbol)
-                                    logging.info(f"[{symbol}] Updated best ask price on retry: {best_ask_price}")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated best ask price on retry: {best_ask_price}")
                                     
                                     # Clear and re-issue the grid with updated best ask price
                                     self.clear_grid(symbol, 'sell')
                                     modified_grid_levels_short[0] = best_ask_price
                                     issue_grid_safely(symbol, 'short', modified_grid_levels_short, amounts_short)
 
-                            logging.info(f"[{symbol}] Short position filled or max retries reached, exiting loop.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position filled or max retries reached, exiting loop.")
                             self.last_signal_time[symbol] = current_time
                             self.last_mfirsi_signal[symbol] = "neutral"  # Reset to neutral after processing
 
                 except Exception as e:
-                    logging.info(f"Exception caught in placing orders: {e}")
-                    logging.info("Traceback: %s", traceback.format_exc())
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception caught in placing orders: {e}")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Traceback: %s", traceback.format_exc())
 
 
             if additional_entries_from_signal:
                 if symbol in open_symbols:
-                    logging.info(f"Allowed symbol: [{symbol}]")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Allowed symbol: [{symbol}]")
 
                     fresh_signal = self.generate_l_signals(symbol)
 
-                    logging.info(f"Fresh signal for [{symbol}] : {fresh_signal}")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Fresh signal for [{symbol}] : {fresh_signal}")
 
                     if not hasattr(self, 'last_mfirsi_signal'):
                         self.last_mfirsi_signal = {}
@@ -5918,21 +5920,21 @@ class BybitStrategy(BaseStrategy):
                     time_since_last_signal = current_time - last_signal_time
 
                     if time_since_last_signal < 180:  # 3 minutes
-                        logging.info(f"[{symbol}] Waiting for signal cooldown. Time since last signal: {time_since_last_signal:.2f} seconds")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Waiting for signal cooldown. Time since last signal: {time_since_last_signal:.2f} seconds")
                         return
 
                     if fresh_signal.lower() != self.last_mfirsi_signal[symbol]:
-                        logging.info(f"[{symbol}] MFIRSI signal changed to {fresh_signal}")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] MFIRSI signal changed to {fresh_signal}")
                         self.last_mfirsi_signal[symbol] = fresh_signal.lower()
                     else:
-                        logging.info(f"[{symbol}] MFIRSI signal unchanged: {fresh_signal}")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] MFIRSI signal unchanged: {fresh_signal}")
 
                     try:
                         # Handling for additional Long entries
                         if fresh_signal.lower() == "long" and long_mode and not self.auto_reduce_active_long.get(symbol, False):
                             if long_pos_qty > 0.00001 and symbol not in self.max_qty_reached_symbol_long:  # Check if a long position already exists
                                 if current_price <= long_pos_price:  # Enter additional entry only if current price <= long_pos_price
-                                    logging.info(f"[{symbol}] Adding to existing long position based on MFIRSI long signal")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Adding to existing long position based on MFIRSI long signal")
 
                                     # Ensure there are no existing active grids
                                     if not self.has_active_grid(symbol, 'long', open_orders):
@@ -5950,34 +5952,34 @@ class BybitStrategy(BaseStrategy):
                                             try:
                                                 long_pos_qty = self.get_position_qty(symbol, 'long')
                                             except Exception as e:
-                                                logging.error(f"[{symbol}] Error fetching long position quantity: {e}")
+                                                logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error fetching long position quantity: {e}")
                                                 break
 
                                             retry_counter += 1
-                                            logging.info(f"[{symbol}] Long position quantity after retry: {long_pos_qty}, retry attempt: {retry_counter}")
+                                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position quantity after retry: {long_pos_qty}, retry attempt: {retry_counter}")
 
                                             if long_pos_qty < 0.00001 and retry_counter < max_retries:
-                                                logging.info(f"[{symbol}] Retrying long grid orders.")
+                                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Retrying long grid orders.")
                                                 self.clear_grid(symbol, 'buy')
                                                 modified_grid_levels_long[0] = best_bid_price
                                                 issue_grid_safely(symbol, 'long', modified_grid_levels_long, amounts_long)
                                                 time.sleep(4)
                                             else:
-                                                logging.info(f"[{symbol}] Long position filled or max retries reached, exiting loop.")
+                                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position filled or max retries reached, exiting loop.")
                                                 break
 
                                         self.last_signal_time[symbol] = current_time
                                         self.last_mfirsi_signal[symbol] = "neutral"
                                     else:
-                                        logging.info(f"[{symbol}] Active long grid detected, skipping additional entry.")
+                                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Active long grid detected, skipping additional entry.")
                                 else:
-                                    logging.info(f"[{symbol}] Current price {current_price} is above long position price {long_pos_price}. Not adding to long position.")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Current price {current_price} is above long position price {long_pos_price}. Not adding to long position.")
 
                         # Handling for additional Short entries
                         elif fresh_signal.lower() == "short" and short_mode and not self.auto_reduce_active_short.get(symbol, False):
                             if short_pos_qty > 0.00001 and symbol not in self.max_qty_reached_symbol_short:  # Check if a short position already exists
                                 if current_price >= short_pos_price:  # Enter additional entry only if current price >= short_pos_price
-                                    logging.info(f"[{symbol}] Adding to existing short position based on MFIRSI short signal")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Adding to existing short position based on MFIRSI short signal")
 
                                     # Ensure there are no existing active grids
                                     if not self.has_active_grid(symbol, 'short', open_orders):
@@ -5995,68 +5997,68 @@ class BybitStrategy(BaseStrategy):
                                             try:
                                                 short_pos_qty = self.get_position_qty(symbol, 'short')
                                             except Exception as e:
-                                                logging.error(f"[{symbol}] Error fetching short position quantity: {e}")
+                                                logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error fetching short position quantity: {e}")
                                                 break
 
                                             retry_counter += 1
-                                            logging.info(f"[{symbol}] Short position quantity after retry: {short_pos_qty}, retry attempt: {retry_counter}")
+                                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position quantity after retry: {short_pos_qty}, retry attempt: {retry_counter}")
 
                                             if short_pos_qty < 0.00001 and retry_counter < max_retries:
-                                                logging.info(f"[{symbol}] Retrying short grid orders.")
+                                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Retrying short grid orders.")
                                                 self.clear_grid(symbol, 'sell')
                                                 modified_grid_levels_short[0] = best_ask_price
                                                 issue_grid_safely(symbol, 'short', modified_grid_levels_short, amounts_short)
                                                 time.sleep(4)
                                             else:
-                                                logging.info(f"[{symbol}] Short position filled or max retries reached, exiting loop.")
+                                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position filled or max retries reached, exiting loop.")
                                                 break
 
                                         self.last_signal_time[symbol] = current_time
                                         self.last_mfirsi_signal[symbol] = "neutral"
                                     else:
-                                        logging.info(f"[{symbol}] Active short grid detected, skipping additional entry.")
+                                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Active short grid detected, skipping additional entry.")
                                 else:
-                                    logging.info(f"[{symbol}] Current price {current_price} is below short position price {short_pos_price}. Not adding to short position.")
+                                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Current price {current_price} is below short position price {short_pos_price}. Not adding to short position.")
 
                         elif fresh_signal.lower() == "neutral":
-                            logging.info(f"[{symbol}] MFIRSI signal is neutral. No new grid orders.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] MFIRSI signal is neutral. No new grid orders.")
 
                         self.last_signal_time[symbol] = current_time
                         self.last_mfirsi_signal[symbol] = "neutral"  # Reset to neutral after processing
 
                     except Exception as e:
-                        logging.info(f"Exception caught in placing entries {e}")
-                        logging.info("Traceback: %s", traceback.format_exc())
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception caught in placing entries {e}")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Traceback: %s", traceback.format_exc())
 
             else:
-                logging.info(f"Additional entries disabled from signal")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Additional entries disabled from signal")
 
             time.sleep(5)
 
-            logging.info(f"Symbol type for grid active check: {symbol}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol type for grid active check: {symbol}")
             long_grid_active, short_grid_active = self.check_grid_active(symbol, open_orders)
 
-            logging.info(f"{symbol} Updated long grid active: {long_grid_active}")
-            logging.info(f"{symbol} Updated short grid active: {short_grid_active}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated long grid active: {long_grid_active}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated short grid active: {short_grid_active}")
 
             # Check if the symbol is in active grids without open orders
             if not has_open_long_order and symbol in self.active_long_grids:
                 self.active_long_grids.discard(symbol)
-                logging.info(f"[{symbol}] No open long orders, removed from active long grids")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No open long orders, removed from active long grids")
 
             if not has_open_short_order and symbol in self.active_short_grids:
                 self.active_short_grids.discard(symbol)
-                logging.info(f"[{symbol}] No open short orders, removed from active short grids")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No open short orders, removed from active short grids")
 
             if symbol in open_symbols: 
                 if (long_pos_qty > 0 and not long_grid_active and not self.has_active_grid(symbol, 'long', open_orders)) or \
                 (short_pos_qty > 0 and not short_grid_active and not self.has_active_grid(symbol, 'short', open_orders)):
-                    logging.info(f"[{symbol}] Open positions found without active grids. Issuing grid orders.")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open positions found without active grids. Issuing grid orders.")
                     
                     # Long Grid Logic
                     if long_pos_qty > 0 and not long_grid_active and symbol not in self.max_qty_reached_symbol_long:
                         if not self.auto_reduce_active_long.get(symbol, False) or entry_during_autoreduce:
-                            logging.info(f"[{symbol}] Placing long grid orders for existing open position.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing long grid orders for existing open position.")
                             
                             # Clear existing long grid
                             self.clear_grid(symbol, 'buy')
@@ -6065,7 +6067,7 @@ class BybitStrategy(BaseStrategy):
                             modified_grid_levels_long = grid_levels_long.copy()
                             best_bid_price = self.get_best_bid_price(symbol)
                             modified_grid_levels_long[0] = best_bid_price * 0.995  # 0.5% lower than the best bid price
-                            logging.info(f"[{symbol}] Setting first level of modified long grid to best_bid_price - 0.5%: {modified_grid_levels_long[0]}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Setting first level of modified long grid to best_bid_price - 0.5%: {modified_grid_levels_long[0]}")
                             
                             # Issue long grid safely
                             issue_grid_safely(symbol, 'long', modified_grid_levels_long, amounts_long)
@@ -6073,7 +6075,7 @@ class BybitStrategy(BaseStrategy):
                     # Short Grid Logic
                     if short_pos_qty > 0 and not short_grid_active and symbol not in self.max_qty_reached_symbol_short:
                         if not self.auto_reduce_active_short.get(symbol, False) or entry_during_autoreduce:
-                            logging.info(f"[{symbol}] Placing short grid orders for existing open position.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing short grid orders for existing open position.")
                             
                             # Clear existing short grid
                             self.clear_grid(symbol, 'sell')
@@ -6082,7 +6084,7 @@ class BybitStrategy(BaseStrategy):
                             modified_grid_levels_short = grid_levels_short.copy()
                             best_ask_price = self.get_best_ask_price(symbol)
                             modified_grid_levels_short[0] = best_ask_price * 1.005  # 0.5% higher than the best ask price
-                            logging.info(f"[{symbol}] Setting first level of modified short grid to best_ask_price + 0.5%: {modified_grid_levels_short[0]}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Setting first level of modified short grid to best_ask_price + 0.5%: {modified_grid_levels_short[0]}")
                             
                             # Issue short grid safely
                             issue_grid_safely(symbol, 'short', modified_grid_levels_short, amounts_short)
@@ -6093,15 +6095,15 @@ class BybitStrategy(BaseStrategy):
                 if not long_pos_qty and not short_pos_qty and symbol in self.active_long_grids | self.active_short_grids:
                     last_cleared = self.last_cleared_time.get(symbol, datetime.min)
                     if current_time - last_cleared > self.clear_interval:
-                        logging.info(f"[{symbol}] No open positions and time interval passed. Canceling leftover grid orders.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No open positions and time interval passed. Canceling leftover grid orders.")
                         self.clear_grid(symbol, 'buy')
                         self.clear_grid(symbol, 'sell')
                         self.last_cleared_time[symbol] = current_time
                     else:
-                        logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No open positions, but time interval not passed. Skipping grid clearing.")
 
             else:
-                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol not in open_symbols: {open_symbols} or trading not allowed")
 
             # Update TP for long position
             if long_pos_qty > 0:
@@ -6150,16 +6152,16 @@ class BybitStrategy(BaseStrategy):
                     # Record the time when the invalid condition is first encountered
                     if symbol not in self.invalid_long_condition_time:
                         self.invalid_long_condition_time[symbol] = current_time
-                        logging.info(f"Invalid long condition first met for {symbol}. Waiting before clearing grid...")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid long condition first met for {symbol}. Waiting before clearing grid...")
 
                     # If 1 minute has passed since the condition was first encountered
                     elif current_time - self.invalid_long_condition_time[symbol] >= 60:
                         self.clear_grid(symbol, "buy")
-                        logging.info(f"Cleared long grid for {symbol} after 1 minute of invalid long_pos_price: {long_pos_price} and no long signal.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Cleared long grid for {symbol} after 1 minute of invalid long_pos_price: {long_pos_price} and no long signal.")
                         # Reset the tracking time after clearing
                         del self.invalid_long_condition_time[symbol]
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol long, cannot replace grid")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] is in max qty reached symbol long, cannot replace grid")
             else:
                 # Reset the tracking if conditions are no longer met
                 if symbol in self.invalid_long_condition_time:
@@ -6173,16 +6175,16 @@ class BybitStrategy(BaseStrategy):
                     # Record the time when the invalid condition is first encountered
                     if symbol not in self.invalid_short_condition_time:
                         self.invalid_short_condition_time[symbol] = current_time
-                        logging.info(f"Invalid short condition first met for {symbol}. Waiting before clearing grid...")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid short condition first met for {symbol}. Waiting before clearing grid...")
 
                     # If 1 minute has passed since the condition was first encountered
                     elif current_time - self.invalid_short_condition_time[symbol] >= 60:
                         self.clear_grid(symbol, "sell")
-                        logging.info(f"Cleared short grid for {symbol} after 1 minute of invalid short_pos_price: {short_pos_price} and no short signal.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Cleared short grid for {symbol} after 1 minute of invalid short_pos_price: {short_pos_price} and no short signal.")
                         # Reset the tracking time after clearing
                         del self.invalid_short_condition_time[symbol]
                 else:
-                    logging.info(f"{symbol} is in max qty reached symbol short, cannot replace grid")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] is in max qty reached symbol short, cannot replace grid")
             else:
                 # Reset the tracking if conditions are no longer met
                 if symbol in self.invalid_short_condition_time:
@@ -6190,8 +6192,8 @@ class BybitStrategy(BaseStrategy):
                             
                             
         except Exception as e:
-            logging.info(f"Error in executing gridstrategy: {e}")
-            logging.info("Traceback: %s", traceback.format_exc())
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error in executing gridstrategy: {e}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Traceback: %s", traceback.format_exc())
 
     def lingrid_ob_lsignal_entryuponsignal(self, symbol: str, open_symbols: list, total_equity: float, long_pos_price: float,
                                                                         short_pos_price: float, long_pos_qty: float, short_pos_qty: float, levels: int,
@@ -6204,13 +6206,13 @@ class BybitStrategy(BaseStrategy):
                                                                         max_qty_percent_long: float, max_qty_percent_short: float):
         try:
             spread = self.get_4h_candle_spread(symbol)
-            logging.info(f"4h Candle spread for [{symbol}]: {spread}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] 4h Candle spread for [{symbol}]: {spread}")
 
             current_price = self.exchange.get_current_price(symbol)
-            logging.info(f"[{symbol}] Current price: {current_price}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Current price: {current_price}")
 
             dynamic_outer_price_distance = max(min_outer_price_distance, min(max_outer_price_distance, spread))
-            logging.info(f"Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Dynamic outer price distance for [{symbol}]: {dynamic_outer_price_distance}")
 
             should_reissue_long, should_reissue_short = self.should_reissue_orders_revised(
                 symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct)
@@ -6230,7 +6232,7 @@ class BybitStrategy(BaseStrategy):
             buffer_distance_long = current_price * buffer_percentage_long
             buffer_distance_short = current_price * buffer_percentage_short
 
-            logging.info(f"[{symbol}] Long buffer distance: {buffer_distance_long}, Short buffer distance: {buffer_distance_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long buffer distance: {buffer_distance_long}, Short buffer distance: {buffer_distance_short}")
 
             order_book = self.exchange.get_orderbook(symbol)
             best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol, current_price)
@@ -6350,15 +6352,15 @@ class BybitStrategy(BaseStrategy):
             grid_levels_long = sorted(grid_levels_long, reverse=True)
             grid_levels_short = sorted(grid_levels_short)
 
-            logging.info(f"[{symbol}] Initial long entry level: {initial_entry_long}")
-            logging.info(f"[{symbol}] Initial short entry level: {initial_entry_short}")
-            logging.info(f"[{symbol}] Long grid levels: {grid_levels_long}")
-            logging.info(f"[{symbol}] Short grid levels: {grid_levels_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Initial long entry level: {initial_entry_long}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Initial short entry level: {initial_entry_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long grid levels: {grid_levels_long}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short grid levels: {grid_levels_short}")
     
 
             qty_precision = self.exchange.get_symbol_precision_bybit(symbol)[1]
             min_qty = float(self.get_market_data_with_retry(symbol, max_retries=100, retry_delay=5)["min_qty"])
-            logging.info(f"[{symbol}] Quantity precision: {qty_precision}, Minimum quantity: {min_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Quantity precision: {qty_precision}, Minimum quantity: {min_qty}")
 
             total_amount_long = self.calculate_total_amount_notional_ls_properdca(
                 symbol=symbol, total_equity=total_equity, best_ask_price=best_ask_price,
@@ -6376,32 +6378,32 @@ class BybitStrategy(BaseStrategy):
                 user_defined_leverage_short=user_defined_leverage_short, long_pos_qty=long_pos_qty, short_pos_qty=short_pos_qty
             ) if short_mode else 0
 
-            logging.info(f"[{symbol}] Total amount long: {total_amount_long}, Total amount short: {total_amount_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Total amount long: {total_amount_long}, Total amount short: {total_amount_short}")
 
             amounts_long = self.calculate_order_amounts_notional_properdca(symbol, total_amount_long, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='buy')
             amounts_short = self.calculate_order_amounts_notional_properdca(symbol, total_amount_short, levels, strength, qty_precision, enforce_full_grid, long_pos_qty, short_pos_qty, side='sell')
-            logging.info(f"Running 'calculate_order_amounts_notional_properdca' on 'lingrid_ob_lsignal_entryuponsignal'")
-            logging.info(f"[{symbol}] Long order amounts: {amounts_long}")
-            logging.info(f"[{symbol}] Short order amounts: {amounts_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Running 'calculate_order_amounts_notional_properdca' on 'lingrid_ob_lsignal_entryuponsignal'")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long order amounts: {amounts_long}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short order amounts: {amounts_short}")
 
             # Update position quantities before processing
             long_pos_qty = self.get_position_qty(symbol, 'long')
             short_pos_qty = self.get_position_qty(symbol, 'short')
 
-            logging.info(f"Updated Long pos qty: {long_pos_qty}")
-            logging.info(f"Updated Short pos qty: {short_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated Long pos qty: {long_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated Short pos qty: {short_pos_qty}")
 
             # Skip if the signal is the same as the last processed signal
             if not hasattr(self, 'last_attempted_signal'):
                 self.last_attempted_signal = None
 
             if self.last_attempted_signal == mfirsi_signal and (long_pos_qty > 0.00001 or short_pos_qty > 0.00001):
-                logging.info(f"Skipping processing for [{symbol}] as the mfirsi_signal is the same as the last attempted signal: {mfirsi_signal}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping processing for [{symbol}] as the mfirsi_signal is the same as the last attempted signal: {mfirsi_signal}")
                 return
 
             # Handle long and short grid replacement based on mfirsi_signal
             if mfirsi_signal.lower() == "long" and long_mode and not self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"[{symbol}] Replacing long grid orders due to MFIRSI signal long.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Replacing long grid orders due to MFIRSI signal long.")
                 self.clear_grid(symbol, 'buy')
                 self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                 self.active_grids.add(symbol)
@@ -6410,7 +6412,7 @@ class BybitStrategy(BaseStrategy):
                     time.sleep(5)  # Wait for some time to allow order to be filled
                     long_pos_qty = self.get_position_qty(symbol, 'long')  # Re-fetch the long position quantity
                     if long_pos_qty < 0.00001:
-                        logging.info(f"[{symbol}] Retrying long grid orders due to MFIRSI signal long.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Retrying long grid orders due to MFIRSI signal long.")
                         self.clear_grid(symbol, 'buy')
                         self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                         self.active_grids.add(symbol)
@@ -6418,7 +6420,7 @@ class BybitStrategy(BaseStrategy):
                         break  # Exit loop once the order is filled
 
             elif mfirsi_signal.lower() == "short" and short_mode and not self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"[{symbol}] Replacing short grid orders due to MFIRSI signal short.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Replacing short grid orders due to MFIRSI signal short.")
                 self.clear_grid(symbol, 'sell')
                 self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                 self.active_grids.add(symbol)
@@ -6427,7 +6429,7 @@ class BybitStrategy(BaseStrategy):
                     time.sleep(5)  # Wait for some time to allow order to be filled
                     short_pos_qty = self.get_position_qty(symbol, 'short')  # Re-fetch the short position quantity
                     if short_pos_qty < 0.00001:
-                        logging.info(f"[{symbol}] Retrying short grid orders due to MFIRSI signal short.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Retrying short grid orders due to MFIRSI signal short.")
                         self.clear_grid(symbol, 'sell')
                         self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                         self.active_grids.add(symbol)
@@ -6435,18 +6437,18 @@ class BybitStrategy(BaseStrategy):
                         break  # Exit loop once the order is filled
                     
             if self.auto_reduce_active_long.get(symbol, False):
-                logging.info(f"Auto-reduce for long position on [{symbol}] is active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for long position on [{symbol}] is active")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for long position on [{symbol}] is not active")
 
             if self.auto_reduce_active_short.get(symbol, False):
-                logging.info(f"Auto-reduce for short position on [{symbol}] is active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for short position on [{symbol}] is active")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
             else:
-                logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for short position on [{symbol}] is not active")
 
             # Initialize last_empty_grid_time for symbol if not present
             if symbol not in self.last_empty_grid_time:
@@ -6469,29 +6471,29 @@ class BybitStrategy(BaseStrategy):
 
             # Check and log if the symbol is in max_qty_reached_symbol_long
             if symbol in self.max_qty_reached_symbol_long:
-                logging.info(f"[{symbol}] Symbol is in max_qty_reached_symbol_long")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol is in max_qty_reached_symbol_long")
 
             if symbol in self.max_qty_reached_symbol_short:
-                logging.info(f"[{symbol}] Symbol is in max_qty_reached_symbol_short")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol is in max_qty_reached_symbol_short")
 
             # Additional logic for managing open symbols and checking trading permissions
             open_symbols = list(set(open_symbols))
-            logging.info(f"Open symbols {open_symbols}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbols {open_symbols}")
 
             trading_allowed = self.can_trade_new_symbol(open_symbols, symbols_allowed, symbol)
-            logging.info(f"Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
-            logging.info(f"Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Checking trading for symbol [{symbol}]. Can trade: {trading_allowed}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol: [{symbol}], In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
             mfi_signal_long = mfirsi_signal.lower() == "long"
             mfi_signal_short = mfirsi_signal.lower() == "short"
 
             if len(open_symbols) < symbols_allowed or symbol in open_symbols:
-                logging.info(f"Allowed symbol: [{symbol}]")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Allowed symbol: [{symbol}]")
 
                 has_open_long_order = any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)
                 has_open_short_order = any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)
 
-                logging.info(f"MFIRSI Signal for [{symbol}] : {mfirsi_signal}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] MFIRSI Signal for [{symbol}] : {mfirsi_signal}")
 
                 replace_long_grid, replace_short_grid = self.should_replace_grid_updated_buffer_min_outerpricedist_v2(
                     symbol, long_pos_price, short_pos_price, long_pos_qty, short_pos_qty,
@@ -6501,30 +6503,30 @@ class BybitStrategy(BaseStrategy):
                 # Replace long grid if conditions are met
                 if (replace_long_grid or (replace_empty_long_grid and (current_time - self.last_empty_grid_time[symbol].get('long', 0) > 240))) and not self.auto_reduce_active_long.get(symbol, False):
                     if symbol not in self.max_qty_reached_symbol_long:
-                        logging.info(f"[{symbol}] Replacing long grid orders due to updated buffer or empty grid timeout.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Replacing long grid orders due to updated buffer or empty grid timeout.")
                         self.clear_grid(symbol, 'buy')
                         buffer_percentage_long = min_buffer_percentage + (max_buffer_percentage - min_buffer_percentage) * (abs(current_price - long_pos_price) / long_pos_price)
                         buffer_distance_long = current_price * buffer_percentage_long
                         self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                         self.active_grids.add(symbol)
                         self.last_empty_grid_time[symbol]['long'] = current_time
-                        logging.info(f"[{symbol}] Recalculated long grid levels with updated buffer: {grid_levels_long}")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Recalculated long grid levels with updated buffer: {grid_levels_long}")
                     else:
-                        logging.info(f"[{symbol}] is in max qty reached symbol long cannot replace grid")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] is in max qty reached symbol long cannot replace grid")
 
                 # Replace short grid if conditions are met
                 if (replace_short_grid or (replace_empty_short_grid and (current_time - self.last_empty_grid_time[symbol].get('short', 0) > 240))) and not self.auto_reduce_active_short.get(symbol, False):
                     if symbol not in self.max_qty_reached_symbol_short:
-                        logging.info(f"[{symbol}] Replacing short grid orders due to updated buffer or empty grid timeout.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Replacing short grid orders due to updated buffer or empty grid timeout.")
                         self.clear_grid(symbol, 'sell')
                         buffer_percentage_short = min_buffer_percentage + (max_buffer_percentage - min_buffer_percentage) * (abs(current_price - short_pos_price) / short_pos_price)
                         buffer_distance_short = current_price * buffer_percentage_short
                         self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                         self.active_grids.add(symbol)
                         self.last_empty_grid_time[symbol]['short'] = current_time
-                        logging.info(f"[{symbol}] Recalculated short grid levels with updated buffer: {grid_levels_short}")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Recalculated short grid levels with updated buffer: {grid_levels_short}")
                     else:
-                        logging.info(f"[{symbol}] is in max qty reached symbol short cannot replace grid")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] is in max qty reached symbol short cannot replace grid")
 
                 if self.should_reissue_orders_revised(symbol, reissue_threshold, long_pos_qty, short_pos_qty, initial_entry_buffer_pct):
                     open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -6535,42 +6537,42 @@ class BybitStrategy(BaseStrategy):
                     if not long_pos_qty and long_mode and not self.auto_reduce_active_long.get(symbol, False) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce or not self.auto_reduce_active_long.get(symbol, False):
                             if symbol in self.active_grids and "buy" in self.filled_levels[symbol] and has_open_long_order:
-                                logging.info(f"[{symbol}] Reissuing long orders due to price movement beyond the threshold.")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Reissuing long orders due to price movement beyond the threshold.")
                                 self.clear_grid(symbol, 'buy')
                                 self.active_grids.discard(symbol)
-                                logging.info(f"[{symbol}] Placing new long orders.")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new long orders.")
                                 self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                                 self.active_grids.add(symbol)
                             elif symbol not in self.active_grids:
-                                logging.info(f"[{symbol}] No active long grid for the symbol. Skipping long grid reissue.")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No active long grid for the symbol. Skipping long grid reissue.")
 
                     if not short_pos_qty and short_mode and not self.auto_reduce_active_short.get(symbol, False) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce or not self.auto_reduce_active_short.get(symbol, False):
                             if symbol in self.active_grids and "sell" in self.filled_levels[symbol] and has_open_short_order:
-                                logging.info(f"[{symbol}] Reissuing short orders due to price movement beyond the threshold.")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Reissuing short orders due to price movement beyond the threshold.")
                                 self.clear_grid(symbol, 'sell')
                                 self.active_grids.discard(symbol)
-                                logging.info(f"[{symbol}] Placing new short orders.")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new short orders.")
                                 self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                                 self.active_grids.add(symbol)
                             elif symbol not in self.active_grids:
-                                logging.info(f"[{symbol}] No active short grid for the symbol. Skipping short grid reissue.")
+                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No active short grid for the symbol. Skipping short grid reissue.")
             else:
-                logging.info(f"Open symbols is {open_symbols} and symbols allowed is {symbols_allowed}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbols is {open_symbols} and symbols allowed is {symbols_allowed}")
 
             if symbol in open_symbols or trading_allowed:
                 if (long_pos_qty > 0 and not long_grid_active) or (short_pos_qty > 0 and not short_grid_active):
-                    logging.info(f"[{symbol}] Open positions found without active grids. Issuing grid orders.")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open positions found without active grids. Issuing grid orders.")
                     if long_pos_qty > 0 and not long_grid_active and symbol not in self.max_qty_reached_symbol_long:
                         if not self.auto_reduce_active_long.get(symbol, False) or entry_during_autoreduce:
-                            logging.info(f"[{symbol}] Placing long grid orders for existing open position.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing long grid orders for existing open position.")
                             self.clear_grid(symbol, 'buy')
                             self.active_grids.discard(symbol)
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                     if short_pos_qty > 0 and not short_grid_active and symbol not in self.max_qty_reached_symbol_short:
                         if not self.auto_reduce_active_short.get(symbol, False) or entry_during_autoreduce:
-                            logging.info(f"[{symbol}] Placing short grid orders for existing open position.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing short grid orders for existing open position.")
                             self.clear_grid(symbol, 'sell')
                             self.active_grids.discard(symbol)
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
@@ -6581,17 +6583,17 @@ class BybitStrategy(BaseStrategy):
                 if not long_pos_qty and not short_pos_qty and symbol in self.active_grids:
                     last_cleared = self.last_cleared_time.get(symbol, datetime.min)
                     if current_time - last_cleared > self.clear_interval:
-                        logging.info(f"[{symbol}] No open positions and time interval passed. Canceling leftover grid orders.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No open positions and time interval passed. Canceling leftover grid orders.")
                         self.clear_grid(symbol, 'buy')
                         self.clear_grid(symbol, 'sell')
                         self.active_grids.discard(symbol)
                         self.last_cleared_time[symbol] = current_time
                     else:
-                        logging.info(f"[{symbol}] No open positions, but time interval not passed. Skipping grid clearing.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No open positions, but time interval not passed. Skipping grid clearing.")
 
                 # Check if auto-reduce is not active for long position
                 if not self.auto_reduce_active_long.get(symbol, False):
-                    logging.info(f"Auto-reduce for long position on [{symbol}] is not active")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for long position on [{symbol}] is not active")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if should_reissue_long or (long_pos_qty > 0 and not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "buy")
@@ -6599,22 +6601,22 @@ class BybitStrategy(BaseStrategy):
                             self.filled_levels[symbol]["buy"].clear()
 
                         if not any(order['side'].lower() == 'buy' and not order['reduceOnly'] for order in open_orders) and not long_grid_active:
-                            logging.info(f"[{symbol}] Placing new long grid orders.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new long grid orders.")
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                 else:
                     logging.info(f"Auto-reduce for long position on [{symbol}] is active, entry during auto-reduce.")
                     if long_mode and (mfi_signal_long or long_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_long:
                         if entry_during_autoreduce:
-                            logging.info(f"[{symbol}] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new long orders despite active auto-reduce due to entry_during_autoreduce setting.")
                             self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                             self.active_grids.add(symbol)
                         else:
-                            logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                 # Check if auto-reduce is not active for short position
                 if not self.auto_reduce_active_short.get(symbol, False):
-                    logging.info(f"Auto-reduce for short position on [{symbol}] is not active")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for short position on [{symbol}] is not active")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if should_reissue_short or (short_pos_qty > 0 and not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders)):
                             self.cancel_grid_orders(symbol, "sell")
@@ -6622,56 +6624,56 @@ class BybitStrategy(BaseStrategy):
                             self.filled_levels[symbol]["sell"].clear()
 
                         if not any(order['side'].lower() == 'sell' and not order['reduceOnly'] for order in open_orders) and not short_grid_active:
-                            logging.info(f"[{symbol}] Placing new short grid orders.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new short grid orders.")
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                 else:
-                    logging.info(f"Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Auto-reduce for short position on [{symbol}] is active, entry during auto-reduce.")
                     if short_mode and (mfi_signal_short or short_pos_qty > 0) and symbol not in self.max_qty_reached_symbol_short:
                         if entry_during_autoreduce:
-                            logging.info(f"[{symbol}] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new short orders despite active auto-reduce due to entry_during_autoreduce setting.")
                             self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                             self.active_grids.add(symbol)
                         else:
-                            logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
 
             else:
-                logging.info(f"Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Symbol [{symbol}] not in open_symbols: {open_symbols} or trading not allowed")
 
             # Determine if there are open long and short positions based on provided quantities
             has_open_long_position = long_pos_qty > 0
             has_open_short_position = short_pos_qty > 0
 
-            logging.info(f"[{symbol}] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] has long position: {has_open_long_position}, has short position: {has_open_short_position}")
 
-            logging.info(f"[{symbol}] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Number of open symbols: {len(open_symbols)}, Symbols allowed: {symbols_allowed}")
 
             if (len(open_symbols) < symbols_allowed and symbol not in self.active_grids) or (symbol in open_symbols and (not has_open_long_position or not has_open_short_position)):
-                logging.info(f"[{symbol}] Checking for new trading opportunities.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Checking for new trading opportunities.")
 
                 if long_mode and mfi_signal_long and not has_open_long_position and symbol not in self.max_qty_reached_symbol_long:
                     if not self.auto_reduce_active_long.get(symbol, False) or entry_during_autoreduce:
-                        logging.info(f"[{symbol}] Placing new long orders (either no active long auto-reduce or entry during auto-reduce is allowed).")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new long orders (either no active long auto-reduce or entry during auto-reduce is allowed).")
                         self.issue_grid_orders(symbol, "buy", grid_levels_long, amounts_long, True, self.filled_levels[symbol]["buy"])
                         self.active_grids.add(symbol)
                     else:
-                        logging.info(f"[{symbol}] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping new long orders due to active long auto-reduce and entry_during_autoreduce set to False.")
 
                 if short_mode and mfi_signal_short and not has_open_short_position and symbol not in self.max_qty_reached_symbol_short:
                     if not self.auto_reduce_active_short.get(symbol, False) or entry_during_autoreduce:
-                        logging.info(f"[{symbol}] Placing new short orders (either no active short auto-reduce or entry during auto-reduce is allowed).")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placing new short orders (either no active short auto-reduce or entry during auto-reduce is allowed).")
                         self.issue_grid_orders(symbol, "sell", grid_levels_short, amounts_short, False, self.filled_levels[symbol]["sell"])
                         self.active_grids.add(symbol)
                     else:
-                        logging.info(f"[{symbol}] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping new short orders due to active short auto-reduce and entry_during_autoreduce set to False.")
         
 
             # Calculate take profit for short and long positions using quickscalp method
             short_take_profit = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
             long_take_profit = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
 
-            logging.info(f"Long pos qty: {long_pos_qty}")
-            logging.info(f"Short pos qty: {short_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long pos qty: {long_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short pos qty: {short_pos_qty}")
 
             # Update TP for long position
             if long_pos_qty > 0:
@@ -6715,8 +6717,8 @@ class BybitStrategy(BaseStrategy):
             time.sleep(5)
 
         except Exception as e:
-            logging.info(f"Error in executing gridstrategy: {e}")
-            logging.info("Traceback: %s", traceback.format_exc())
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error in executing gridstrategy: {e}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Traceback: %s", traceback.format_exc())
 
 
     def linear_grid_hardened_gridspan_ob_volumelevels_dynamictp_lsignal(self, symbol: str, open_symbols: list, total_equity: float, long_pos_price: float,
@@ -12436,7 +12438,7 @@ class BybitStrategy(BaseStrategy):
     ) -> tuple:
         try:
             current_price = self.exchange.get_current_price(symbol)
-            logging.info(f"[{symbol}] Current price: {current_price}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Current price: {current_price}")
 
             # Retrieve the last reissue prices, ensure they are floats
             last_reissue_price_long = self.last_reissue_price_long.get(symbol, long_pos_price)
@@ -12444,15 +12446,15 @@ class BybitStrategy(BaseStrategy):
 
             # Safeguard against None values
             if last_reissue_price_long is None:
-                logging.info(f"[{symbol}] Last reissue price (long) is None, setting it to long_pos_price: {long_pos_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last reissue price (long) is None, setting it to long_pos_price: {long_pos_price}")
                 last_reissue_price_long = long_pos_price
 
             if last_reissue_price_short is None:
-                logging.info(f"[{symbol}] Last reissue price (short) is None, setting it to short_pos_price: {short_pos_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last reissue price (short) is None, setting it to short_pos_price: {short_pos_price}")
                 last_reissue_price_short = short_pos_price
 
-            logging.info(f"[{symbol}] Last reissue price (long): {last_reissue_price_long}")
-            logging.info(f"[{symbol}] Last reissue price (short): {last_reissue_price_short}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last reissue price (long): {last_reissue_price_long}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last reissue price (short): {last_reissue_price_short}")
 
             replace_long_grid = False
             replace_short_grid = False
@@ -12461,41 +12463,41 @@ class BybitStrategy(BaseStrategy):
                 required_price_move_long_pct = dynamic_outer_price_distance_long * 100.0
                 price_change_pct_long = abs(current_price - last_reissue_price_long) / last_reissue_price_long * 100.0
 
-                logging.info(f"[{symbol}] Long position info:")
-                logging.info(f"Dynamic outer price distance: {dynamic_outer_price_distance_long * 100.0:.2f}%")
-                logging.info(f"  - Long position price: {long_pos_price}")
-                logging.info(f"  - Long position quantity: {long_pos_qty}")
-                logging.info(f"  - Required price move for reissue (long): {required_price_move_long_pct:.2f}%")
-                logging.info(f"  - Current price change percentage: {price_change_pct_long:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position info:")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Dynamic outer price distance: {dynamic_outer_price_distance_long * 100.0:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Long position price: {long_pos_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Long position quantity: {long_pos_qty}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Required price move for reissue (long): {required_price_move_long_pct:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Current price change percentage: {price_change_pct_long:.2f}%")
 
                 if price_change_pct_long > required_price_move_long_pct:
                     replace_long_grid = True
-                    logging.info(f"[{symbol}] Price change exceeds dynamic outer price distance percentage for long position. Replacing long grid.")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change exceeds dynamic outer price distance percentage for long position. Replacing long grid.")
                     self.last_reissue_price_long[symbol] = current_price  # Update last reissue price for long
 
             if short_pos_qty > 0 and last_reissue_price_short is not None:
                 required_price_move_short_pct = dynamic_outer_price_distance_short * 100.0
                 price_change_pct_short = abs(current_price - last_reissue_price_short) / last_reissue_price_short * 100.0
 
-                logging.info(f"[{symbol}] Short position info:")
-                logging.info(f"Dynamic outer price distance: {dynamic_outer_price_distance_short * 100.0:.2f}%")
-                logging.info(f"  - Short position price: {short_pos_price}")
-                logging.info(f"  - Short position quantity: {short_pos_qty}")
-                logging.info(f"  - Required price move for reissue (short): {required_price_move_short_pct:.2f}%")
-                logging.info(f"  - Current price change percentage: {price_change_pct_short:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position info:")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Dynamic outer price distance: {dynamic_outer_price_distance_short * 100.0:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Short position price: {short_pos_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Short position quantity: {short_pos_qty}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Required price move for reissue (short): {required_price_move_short_pct:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] - Current price change percentage: {price_change_pct_short:.2f}%")
 
                 if price_change_pct_short > required_price_move_short_pct:
                     replace_short_grid = True
-                    logging.info(f"[{symbol}] Price change exceeds dynamic outer price distance percentage for short position. Replacing short grid.")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change exceeds dynamic outer price distance percentage for short position. Replacing short grid.")
                     self.last_reissue_price_short[symbol] = current_price  # Update last reissue price for short
 
-            logging.info(f"[{symbol}] Should replace long grid: {replace_long_grid}")
-            logging.info(f"[{symbol}] Should replace short grid: {replace_short_grid}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Should replace long grid: {replace_long_grid}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Should replace short grid: {replace_short_grid}")
 
             return replace_long_grid, replace_short_grid
 
         except Exception as e:
-            logging.exception(f"Exception caught in should_replace_grid_updated_buffer_min_outerpricedist_v2: {e}")
+            logging.exception(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception caught in should_replace_grid_updated_buffer_min_outerpricedist_v2: {e}")
             return False, False
             
     def should_replace_grid_updated_buffer_min_outerpricedist(self, symbol: str, long_pos_price: float, short_pos_price: float, long_pos_qty: float, short_pos_qty: float, min_outer_price_distance: float) -> tuple:
@@ -12566,24 +12568,24 @@ class BybitStrategy(BaseStrategy):
             last_price = self.last_price.get(symbol)
             
             # Log the incoming parameters for better traceability
-            logging.info(f"[{symbol}] Input parameters - reissue_threshold: {reissue_threshold}, initial_entry_buffer_pct: {initial_entry_buffer_pct}, long_pos_qty: {long_pos_qty}, short_pos_qty: {short_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Input parameters - reissue_threshold: {reissue_threshold}, initial_entry_buffer_pct: {initial_entry_buffer_pct}, long_pos_qty: {long_pos_qty}, short_pos_qty: {short_pos_qty}")
             
             if last_price is None:
                 self.last_price[symbol] = current_price
-                logging.info(f"[{symbol}] No last price recorded. Setting current price {current_price} as last price. No reissue required.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No last price recorded. Setting current price {current_price} as last price. No reissue required.")
                 return False, False
             
             # Ensure last_price is not None before performing the subtraction
             if last_price is not None:
                 price_change_percentage = abs(current_price - last_price) / last_price * 100
-                logging.info(f"[{symbol}] Last recorded price: {last_price}, Current price: {current_price}, Price change: {price_change_percentage:.2f}%")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last recorded price: {last_price}, Current price: {current_price}, Price change: {price_change_percentage:.2f}%")
             else:
-                logging.warning(f"[{symbol}] Last price is None, skipping reissue check.")
+                logging.warning(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last price is None, skipping reissue check.")
                 return False, False
             
             # Adjust threshold by initial buffer percentage correctly
             adjusted_reissue_threshold = reissue_threshold + (reissue_threshold * initial_entry_buffer_pct / 100)
-            logging.info(f"[{symbol}] Adjusted reissue threshold: {adjusted_reissue_threshold:.5f}% (Initial: {reissue_threshold}%, Buffer: {initial_entry_buffer_pct}%)")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Adjusted reissue threshold: {adjusted_reissue_threshold:.5f}% (Initial: {reissue_threshold}%, Buffer: {initial_entry_buffer_pct}%)")
             
             # Define a small threshold to determine if the position is effectively zero
             position_threshold = 0.00001
@@ -12596,19 +12598,19 @@ class BybitStrategy(BaseStrategy):
                 self.last_price[symbol] = current_price
 
             if reissue_long:
-                logging.info(f"[{symbol}] Price change ({price_change_percentage:.2f}%) exceeds adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%). Reissuing long orders.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change ({price_change_percentage:.2f}%) exceeds adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%). Reissuing long orders.")
             else:
-                logging.info(f"[{symbol}] Price change ({price_change_percentage:.2f}%) does not exceed adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%) or long position is open. No reissue required for long orders.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change ({price_change_percentage:.2f}%) does not exceed adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%) or long position is open. No reissue required for long orders.")
             
             if reissue_short:
-                logging.info(f"[{symbol}] Price change ({price_change_percentage:.2f}%) exceeds adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%). Reissuing short orders.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change ({price_change_percentage:.2f}%) exceeds adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%). Reissuing short orders.")
             else:
-                logging.info(f"[{symbol}] Price change ({price_change_percentage:.2f}%) does not exceed adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%) or short position is open. No reissue required for short orders.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change ({price_change_percentage:.2f}%) does not exceed adjusted reissue threshold ({adjusted_reissue_threshold:.2f}%) or short position is open. No reissue required for short orders.")
             
             return reissue_long, reissue_short
         
         except Exception as e:
-            logging.exception(f"Exception caught in should_reissue_orders: {e}")
+            logging.exception(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception caught in should_reissue_orders: {e}")
             return False, False
 
 
@@ -12619,26 +12621,26 @@ class BybitStrategy(BaseStrategy):
 
             if last_price is None:
                 self.last_price[symbol] = current_price
-                logging.info(f"[{symbol}] No last price recorded. Current price {current_price} set as last price. No reissue required.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No last price recorded. Current price {current_price} set as last price. No reissue required.")
                 return False
 
             price_change_percentage = abs(current_price - last_price) / last_price * 100
-            logging.info(f"[{symbol}] Last recorded price: {last_price}, Current price: {current_price}, Price change: {price_change_percentage:.2f}%")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last recorded price: {last_price}, Current price: {current_price}, Price change: {price_change_percentage:.2f}%")
 
             if price_change_percentage >= reissue_threshold * 100:
                 self.last_price[symbol] = current_price
-                logging.info(f"[{symbol}] Price change ({price_change_percentage:.2f}%) exceeds reissue threshold ({reissue_threshold*100:.2f}%). Reissuing orders.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change ({price_change_percentage:.2f}%) exceeds reissue threshold ({reissue_threshold*100:.2f}%). Reissuing orders.")
                 return True
             else:
-                logging.info(f"[{symbol}] Price change ({price_change_percentage:.2f}%) does not exceed reissue threshold ({reissue_threshold*100:.2f}%). No reissue required.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Price change ({price_change_percentage:.2f}%) does not exceed reissue threshold ({reissue_threshold*100:.2f}%). No reissue required.")
                 return False
         except Exception as e:
-            logging.exception(f"Exception caught in should_reissue_orders: {e}")
+            logging.exception(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception caught in should_reissue_orders: {e}")
             return False
 
     def clear_grid(self, symbol, side, max_retries=50, delay=2):
         """Clear all orders and internal states for a specific grid side with retries, excluding reduce-only orders."""
-        logging.info(f"Clearing {side} grid for {symbol}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing {side} grid for {symbol}")
 
         retry_counter = 0
         while retry_counter < max_retries:
@@ -12652,7 +12654,7 @@ class BybitStrategy(BaseStrategy):
             if not lingering_orders:
                 # Clear filled levels for the side when no more lingering orders
                 self.filled_levels[symbol][side].clear()
-                logging.info(f"Successfully cleared {side} grid for {symbol}.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Successfully cleared {side} grid for {symbol}.")
                 
                 # Mark the grid as cleared
                 if side == 'buy':
@@ -12662,14 +12664,14 @@ class BybitStrategy(BaseStrategy):
 
                 break
             else:
-                logging.warning(f"Lingering {side} orders detected for {symbol} (non-reduce-only): {lingering_orders}. Retrying...")
+                logging.warning(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Lingering {side} orders detected for {symbol} (non-reduce-only): {lingering_orders}. Retrying...")
                 retry_counter += 1
                 time.sleep(delay)  # Wait before retrying
 
         if retry_counter == max_retries:
-            logging.error(f"Failed to clear all {side} grid orders for {symbol} after {max_retries} attempts.")
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to clear all {side} grid orders for {symbol} after {max_retries} attempts.")
         else:
-            logging.info(f"{side.capitalize()} grid cleared after {retry_counter} retries for {symbol}.")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side.capitalize()} grid cleared after {retry_counter} retries for {symbol}.")
 
 
     # def clear_grid(self, symbol, side, max_retries=50, delay=2):
@@ -12743,22 +12745,22 @@ class BybitStrategy(BaseStrategy):
 
             # Clear existing grid before placing new orders
             if is_long:
-                logging.info(f"Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
                 self.clear_grid(symbol, 'buy')
                 self.last_reissue_price_long[symbol] = current_price
-                logging.info(f"Updated last reissue price for long orders of [{symbol}] to {current_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated last reissue price for long orders of [{symbol}] to {current_price}")
             else:
-                logging.info(f"Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
                 self.clear_grid(symbol, 'sell')
                 self.last_reissue_price_short[symbol] = current_price
-                logging.info(f"Updated last reissue price for short orders of [{symbol}] to {current_price}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated last reissue price for short orders of [{symbol}] to {current_price}")
 
             # Clear the filled_levels set before placing new orders
             filled_levels.clear()
 
             # Add logging to verify types before the zip operation
-            logging.info(f"Inside issue_grid_orders - Type of grid_levels: {type(grid_levels)}, Value: {grid_levels}")
-            logging.info(f"Inside issue_grid_orders - Type of amounts: {type(amounts)}, Value: {amounts}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside issue_grid_orders - Type of grid_levels: {type(grid_levels)}, Value: {grid_levels}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside issue_grid_orders - Type of amounts: {type(amounts)}, Value: {amounts}")
 
             # Ensure grid_levels and amounts are lists
             assert isinstance(grid_levels, list), f"Expected grid_levels to be a list, but got {type(grid_levels)}"
@@ -12780,18 +12782,18 @@ class BybitStrategy(BaseStrategy):
                     try:
                         order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
                         if order and 'id' in order:
-                            logging.info(f"Placed {side} order at level {level} for [{symbol}] with amount {amount}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placed {side} order at level {level} for [{symbol}] with amount {amount}")
                             filled_levels.add(level)  # Add the level to filled_levels
                         else:
-                            logging.info(f"Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
+                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
                     except Exception as e:
-                        logging.error(f"Exception when placing {side} order at level {level} for [{symbol}]: {e}")
+                        logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception when placing {side} order at level {level} for [{symbol}]: {e}")
                 else:
-                    logging.info(f"Skipping {side} order at level {level} for [{symbol}] as it already exists.")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping {side} order at level {level} for [{symbol}] as it already exists.")
 
-            logging.info(f"[{symbol}] {side.capitalize()} grid orders issued for unfilled levels.")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side.capitalize()} grid orders issued for unfilled levels.")
         except Exception as e:
-            logging.error(f"Exception in issue_grid_orders: {e}")
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception in issue_grid_orders: {e}")
 
     def cancel_grid_orders(self, symbol: str, side: str):
         try:
@@ -12803,23 +12805,23 @@ class BybitStrategy(BaseStrategy):
                 if order['side'].lower() == side.lower() and not order.get('reduceOnly', False):
                     self.exchange.cancel_order_by_id(order['id'], symbol)
                     orders_canceled += 1
-                    logging.info(f"Canceled order {order['id']} for [{symbol}]")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Canceled order {order['id']} for [{symbol}]")
 
             if orders_canceled > 0:
-                logging.info(f"Canceled {orders_canceled} {side} grid orders for [{symbol}]")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Canceled {orders_canceled} {side} grid orders for [{symbol}]")
             else:
-                logging.info(f"No {side} grid orders found to cancel for {symbol}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No {side} grid orders found to cancel for {symbol}")
 
             # Remove the symbol from active grids
             if side.lower() == 'buy' and orders_canceled > 0:
                 self.active_long_grids.discard(symbol)
-                logging.info(f"Removed {symbol} from active long grids")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Removed {symbol} from active long grids")
             elif side.lower() == 'sell' and orders_canceled > 0:
                 self.active_short_grids.discard(symbol)
-                logging.info(f"Removed [{symbol}] from active short grids")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Removed [{symbol}] from active short grids")
 
         except Exception as e:
-            logging.error(f"An error occurred while canceling grid orders: {e}")
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] An error occurred while canceling grid orders: {e}")
 
 
     def calculate_total_amount(self, symbol: str, total_equity: float, best_ask_price: float, best_bid_price: float, wallet_exposure_limit: float, user_defined_leverage: float, side: str, levels: int, min_qty: float, enforce_full_grid: bool) -> float:
@@ -12930,14 +12932,14 @@ class BybitStrategy(BaseStrategy):
                                                     wallet_exposure_limit_short: float, 
                                                     levels: int, qty_precision: float, 
                                                     side: str, strength: float, long_pos_qty=0, short_pos_qty=0) -> List[float]:
-        logging.info(f"Calculating progressive drawdown order amounts for {symbol} with full position value distribution across {levels} levels.")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculating progressive drawdown order amounts for {symbol} with full position value distribution across {levels} levels.")
         
         # Determine the wallet exposure limit based on the side
         wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
         
         # Calculate the maximum position value for the symbol (no subtraction of current position)
         max_position_value = total_equity * wallet_exposure_limit
-        logging.info(f"Maximum position value for {symbol}: {max_position_value}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Maximum position value for {symbol}: {max_position_value}")
         
         # Get the minimum notional and quantity
         min_qty = self.get_min_qty(symbol)
@@ -12972,7 +12974,7 @@ class BybitStrategy(BaseStrategy):
             # Enforce the minimum notional or quantity
             notional_value = quantity * current_price
             if notional_value < min_notional:
-                logging.info(f"Level {i+1}: Adjusting order to respect minimum notional requirement.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Level {i+1}: Adjusting order to respect minimum notional requirement.")
                 quantity = max(min_notional / current_price, min_qty)  # Ensure min_qty is respected
             
             # Round the quantity based on precision and ensure it's above the minimum quantity
@@ -12980,7 +12982,7 @@ class BybitStrategy(BaseStrategy):
             
             # Add the calculated and rounded quantity to the amounts list
             amounts.append(rounded_quantity)
-            logging.info(f"Level {i+1} - Progressive drawdown order quantity: {rounded_quantity}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Level {i+1} - Progressive drawdown order quantity: {rounded_quantity}")
             
             # Update cumulative position value after adding the order
             cumulative_position_value += rounded_quantity * current_price
@@ -13281,7 +13283,7 @@ class BybitStrategy(BaseStrategy):
 
     def check_and_manage_positions(self, long_pos_qty, short_pos_qty, symbol, total_equity, current_price, wallet_exposure_limit_long, wallet_exposure_limit_short, max_qty_percent_long, max_qty_percent_short):
         try:
-            logging.info(f"Checking and managing positions for [{symbol}]")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Checking and managing positions for [{symbol}]")
 
             # Calculate the maximum allowed positions based on the total equity and wallet exposure limits
             max_qty_long = (total_equity * wallet_exposure_limit_long) / current_price
@@ -13292,46 +13294,46 @@ class BybitStrategy(BaseStrategy):
             short_pos_exposure_percent = (short_pos_qty * current_price / total_equity) * 100
 
             # Log the position utilization and the actual utilization based on total equity
-            logging.info(f"[{symbol}]:- Position utilization: ")
-            logging.info(f"  [{symbol}]:- Long position exposure: {long_pos_exposure_percent:.2f}% of total equity")
-            logging.info(f"  [{symbol}]:- Short position exposure: {short_pos_exposure_percent:.2f}% of total equity")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]]:- Position utilization: ")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]]:- Long position exposure: {long_pos_exposure_percent:.2f}% of total equity")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]]:- Short position exposure: {short_pos_exposure_percent:.2f}% of total equity")
 
             # Log detailed information about the configuration parameters and maximum allowed positions
-            logging.info(f"Configuration for [{symbol}]:")
-            logging.info(f"  [{symbol}]:- Total equity: {total_equity:.2f} USD")
-            logging.info(f"  [{symbol}]:- Current price: {current_price:.8f} USD")
-            logging.info(f"  [{symbol}]:- Wallet exposure limit for long: {wallet_exposure_limit_long * 100:.2f}%")
-            logging.info(f"  [{symbol}]:- Wallet exposure limit for short: {wallet_exposure_limit_short * 100:.2f}%")
-            logging.info(f"  [{symbol}]:- Max quantity percentage for long: {max_qty_percent_long}%")
-            logging.info(f"  [{symbol}]:- Max quantity percentage for short: {max_qty_percent_short}%")
-            logging.info(f"Maximum allowed positions for [{symbol}]:")
-            logging.info(f"  [{symbol}]:- Max quantity for long: {max_qty_long:.4f} units")
-            logging.info(f"  [{symbol}]:- Max quantity for short: {max_qty_short:.4f} units")
-            logging.info(f"[{symbol}]:- Long position quantity: {long_pos_qty}")
-            logging.info(f"[{symbol}]:- Short position quantity: {short_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Configuration for [{symbol}]:")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Total equity: {total_equity:.2f} USD")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Current price: {current_price:.8f} USD")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Wallet exposure limit for long: {wallet_exposure_limit_long * 100:.2f}%")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Wallet exposure limit for short: {wallet_exposure_limit_short * 100:.2f}%")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Max quantity percentage for long: {max_qty_percent_long}%")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Max quantity percentage for short: {max_qty_percent_short}%")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Maximum allowed positions for [{symbol}]:")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Max quantity for long: {max_qty_long:.4f} units")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Max quantity for short: {max_qty_short:.4f} units")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Long position quantity: {long_pos_qty}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] :- Short position quantity: {short_pos_qty}")
 
             # Check if current positions exceed the maximum allowed quantities
             if long_pos_exposure_percent > max_qty_percent_long:
-                logging.info(f"[{symbol}] Long position exposure exceeds the maximum allowed. Current long position exposure: {long_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_long}%. Clearing long grid.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position exposure exceeds the maximum allowed. Current long position exposure: {long_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_long}%. Clearing long grid.")
                 self.clear_grid(symbol, 'buy')
                 self.active_grids.discard(symbol)
                 self.max_qty_reached_symbol_long.add(symbol)
             elif symbol in self.max_qty_reached_symbol_long and long_pos_exposure_percent <= max_qty_percent_long:
-                logging.info(f"[{symbol}] Long position exposure is below the maximum allowed. Removing from max_qty_reached_symbol_long. Current long position exposure: {long_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_long}%.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long position exposure is below the maximum allowed. Removing from max_qty_reached_symbol_long. Current long position exposure: {long_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_long}%.")
                 self.max_qty_reached_symbol_long.remove(symbol)
 
             if short_pos_exposure_percent > max_qty_percent_short:
-                logging.info(f"[{symbol}] Short position exposure exceeds the maximum allowed. Current short position exposure: {short_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_short}%. Clearing short grid.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position exposure exceeds the maximum allowed. Current short position exposure: {short_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_short}%. Clearing short grid.")
                 self.clear_grid(symbol, 'sell')
                 self.active_grids.discard(symbol)
                 self.max_qty_reached_symbol_short.add(symbol)
             elif symbol in self.max_qty_reached_symbol_short and short_pos_exposure_percent <= max_qty_percent_short:
-                logging.info(f"[{symbol}] Short position exposure is below the maximum allowed. Removing from max_qty_reached_symbol_short. Current short position exposure: {short_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_short}%.")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short position exposure is below the maximum allowed. Removing from max_qty_reached_symbol_short. Current short position exposure: {short_pos_exposure_percent:.2f}%, Max allowed: {max_qty_percent_short}%.")
                 self.max_qty_reached_symbol_short.remove(symbol)
 
         except Exception as e:
-            logging.error(f"Exception caught in check and manage positions: {e}")
-            logging.info("Traceback:", traceback.format_exc())
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception caught in check and manage positions: {e}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Traceback:", traceback.format_exc())
 
     def calculate_total_amount_notional_ls(self, symbol, total_equity, best_ask_price, best_bid_price, 
                                             wallet_exposure_limit_long, wallet_exposure_limit_short, 
