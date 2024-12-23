@@ -5116,7 +5116,36 @@ class BybitStrategy(BaseStrategy):
                 initial_entry_long, initial_entry_short
             )
 
+            logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Output of finalize_grid_levels - Long: {grid_levels_long}, Short: {grid_levels_short}")
+
+            # --- Ensure Proper Sorting Here ---
+            # Convert grid levels to float if they are not already
+            grid_levels_long = [float(price) for price in grid_levels_long]
+            grid_levels_short = [float(price) for price in grid_levels_short]
+
+            # Log grid levels before sorting
+            logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Grid Levels Before Sorting - Long: {grid_levels_long}")
+            logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Grid Levels Before Sorting - Short: {grid_levels_short}")
+
+            # Ensure grid levels are sorted appropriately
+            # For long positions: ascending order (lowest to highest price)
+            # grid_levels_long = sorted(grid_levels_long)
+            # For short positions: descending order (highest to lowest price)
+            # grid_levels_short = sorted(grid_levels_short, reverse=True)
+
+            # Log grid levels after sorting
+            # logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Grid Levels After Sorting - Long: {grid_levels_long}")
+            # logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Grid Levels After Sorting - Short: {grid_levels_short}")
+
+            logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Kept Original Grid Levels - Long: {grid_levels_long}")
+            logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Kept Originl Grid Levels - Short: {grid_levels_short}")
+
+            # --- End of Sorting ---
+
+            # Get quantity precision and minimum quantity
             qty_precision, min_qty = self.get_precision_and_min_qty(symbol)
+            min_notional = self.min_notional(symbol)
+            logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Quantity Precision: {qty_precision}, Min Qty: {min_qty}, Min Notional: {min_notional}")
 
             # Apply drawdown behavior based on configuration
             if drawdown_behavior == "full_distribution":
