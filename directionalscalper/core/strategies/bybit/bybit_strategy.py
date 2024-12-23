@@ -13225,68 +13225,163 @@ class BybitStrategy(BaseStrategy):
         market_data = self.get_market_data_with_retry(symbol, max_retries=5, retry_delay=5)
         return float(market_data["min_qty"])
 
-    def calculate_order_amounts_progressive_distribution(self, symbol: str, total_equity: float, 
-                                                    best_ask_price: float, best_bid_price: float,
+
+    def calculate_order_amounts_progressive_distribution(
+        self, 
+        symbol: str, 
+        total_equity: float, 
+        best_ask_price: float, 
+        best_bid_price: float,
                                                     wallet_exposure_limit_long: float, 
                                                     wallet_exposure_limit_short: float, 
-                                                    levels: int, qty_precision: float, 
-                                                    side: str, strength: float, long_pos_qty=0, short_pos_qty=0) -> List[float]:
-        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculating progressive drawdown order amounts for {symbol} with full position value distribution across {levels} levels.")
+        levels: int, 
+        qty_precision: float, 
+        side: str, 
+        strength: float, 
+        long_pos_qty: float = 0, 
+        short_pos_qty: float = 0
+    ) -> List[float]:
+        """
+        This updated function:
+        - Computes ideal allocations for all levels (notionals) based on strength.
+        - Attempts allocation from outermost level (levels-1) inward (0).
+        - Allocates up to requested notional per level.
+        - If not enough leftover for full allocation at a level, tries partial.
+        - If partial still doesn't meet min_qty after rounding, that level is skipped.
+        - Returns amounts aligned with the given levels order.
+        """
+
+        # logging.info(f"[[{symbol}]]calc_progress Function calculate_order_amounts_progressive_distribution called")
+
+        # Log the caller name and formatted call stack
+        # logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calling function calculate_order_amounts_progressive_distribution (called by {caller_name})")
         
-        # Determine the wallet exposure limit based on the side
-        wallet_exposure_limit = wallet_exposure_limit_long if side == 'buy' else wallet_exposure_limit_short
+        # Log the full stack trace with proper formatting
+        # formatted_stack = "".join(traceback.format_stack())
+        # logging.info(f"[[{symbol}]] Calling function calculate_order_amounts_progressive_distribution. Call stack:\n{formatted_stack}")
+
+        logging.info(
+            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calculating progressive drawdown order amounts for {symbol} "
+            f"with full position value distribution across {levels} levels."
+        )
         
-        # Calculate the maximum position value for the symbol (no subtraction of current position)
+        # Determine which side (buy or sell) and set the reference price accordingly
+        side_lower = side.lower()
+        if side_lower == 'buy':
+            wallet_exposure_limit = wallet_exposure_limit_long
+            existing_position_value = long_pos_qty * best_ask_price
+            current_price = best_ask_price
+        elif side_lower == 'sell':
+            wallet_exposure_limit = wallet_exposure_limit_short
+            existing_position_value = short_pos_qty * best_bid_price
+            current_price = best_bid_price
+        else:
+            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Invalid side: {side}. Must be 'buy' or 'sell'.")
+            return []
+
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Side: {side_lower}, Wallet Exposure Limit: {wallet_exposure_limit:.4f}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Existing Position Value: {existing_position_value:.4f} USD")
+        
+        # Calculate the maximum allowed position value and the leftover exposure after existing positions
         max_position_value = total_equity * wallet_exposure_limit
-        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Maximum position value for {symbol}: {max_position_value}")
-        
-        # Get the minimum notional and quantity
+        available_position_value = max_position_value - existing_position_value
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Maximum position value for {symbol}: {max_position_value:.4f} USD")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Available position value for new allocations: {available_position_value:.4f} USD")
+
+        # If no leftover exposure, we can't allocate more
+        if available_position_value <= 0:
+            logging.warning(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No available exposure for {side_lower} side.")
+            return [0.0] * levels
+
+        # Fetch minimum trade requirements (min_qty and min_notional)
         min_qty = self.get_min_qty(symbol)
-        min_notional = self.min_notional(symbol)  # Use self.min_notional(symbol) here
+        min_notional = self.min_notional(symbol)
+        logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Minimum Quantity: {min_qty:.4f}, Minimum Notional: {min_notional:.4f} USD")
 
-        # Track the cumulative position value to ensure progressively larger orders
-        cumulative_position_value = long_pos_qty * best_ask_price if side == 'buy' else short_pos_qty * best_bid_price
-
-        # Distribute the full max position value across the specified number of levels
-        amounts = []
-        
-        # Calculate the weighted distribution based on strength
+        # Calculate distribution factors
         total_ratio = sum([(i + 1) ** strength for i in range(levels)])
         level_notional_factors = [(i + 1) ** strength / total_ratio for i in range(levels)]
-        
-        current_price = best_ask_price if side == 'buy' else best_bid_price
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Strength: {strength:.2f} for {side_lower} side; Level Notional Factors: {level_notional_factors}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Current Price: {current_price:.4f} USD")
 
-        for i in range(levels):
-            # Calculate the notional amount for this level
-            level_notional = max_position_value * level_notional_factors[i]
-            quantity = level_notional / current_price
+        # Ideal full allocations before leftover checks
+        ideal_notionals = [max_position_value * factor for factor in level_notional_factors]
+
+        # Initialize allocations
+        amounts = [0.0] * levels
+        leftover = available_position_value
+
+        logging.info(
+            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Allocating from outer to inner. "
+            f"Outermost level index: {levels-1}, Innermost level index: 0."
+        )
+
+        for i in reversed(range(levels)):
+            requested_notional = ideal_notionals[i]
+            if leftover <= 0:
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No leftover exposure remaining. Skipping Level {i+1}.")
+                continue
             
-            # Ensure that the grid levels are larger than the current open position or previous levels
-            if i == 0:
-                # Ensure the first level is larger than the open position
-                quantity = max(quantity, cumulative_position_value / current_price + (i + 1) * qty_precision)
+            if leftover >= requested_notional:
+                # Allocate up to the requested notional
+                qty = requested_notional / current_price
+                # Floor the quantity to ensure it does not exceed leftover
+                rounded_qty = math.floor(qty / qty_precision) * qty_precision
+
+                # Ensure rounded_qty meets min_qty
+                if rounded_qty >= min_qty:
+                    final_notional = rounded_qty * current_price
+                    # Double-check not exceeding leftover
+                    if final_notional <= leftover:
+                        amounts[i] = rounded_qty
+                        leftover -= final_notional
+                        logging.info(
+                            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side_lower.capitalize()} Level {i+1} - Full allocation: {rounded_qty:.4f} units (${final_notional:.4f})"
+                        )
+                    else:
+                        logging.warning(
+                            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side_lower.capitalize()} Level {i+1} allocation not possible without exceeding leftover. Skipping."
+                        )
+                else:
+                    logging.warning(
+                        f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side_lower.capitalize()} Level {i+1} allocation qty {rounded_qty:.4f} below min_qty {min_qty:.4f}. Skipping."
+                    )
             else:
-                # Ensure each subsequent level is larger than the previous one
-                if quantity <= amounts[-1]:
-                    quantity = amounts[-1] + (i + 1) * qty_precision
-
-            # Enforce the minimum notional or quantity
-            notional_value = quantity * current_price
-            if notional_value < min_notional:
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Level {i+1}: Adjusting order to respect minimum notional requirement.")
-                quantity = max(min_notional / current_price, min_qty)  # Ensure min_qty is respected
+                # Allocate as much as possible without exceeding leftover
+                partial_notional = leftover
+                partial_qty = partial_notional / current_price
+                # Round down to nearest qty_precision
+                partial_rounded_qty = math.floor(partial_qty / qty_precision) * qty_precision
+                
+                if partial_rounded_qty >= min_qty:
+                    final_partial_notional = partial_rounded_qty * current_price
+                    if final_partial_notional <= leftover:
+                        amounts[i] = partial_rounded_qty
+                        leftover -= final_partial_notional
+                        logging.info(
+                            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side_lower.capitalize()} Level {i+1} - Partial allocation: {partial_rounded_qty:.4f} units (${final_partial_notional:.4f})"
+                        )
+                    else:
+                        logging.warning(
+                            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side_lower.capitalize()} Level {i+1} partial allocation not possible without exceeding leftover. Skipping."
+                        )
+                else:
+                    logging.warning(
+                        f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side_lower.capitalize()} Level {i+1} partial allocation qty {partial_rounded_qty:.4f} below min_qty {min_qty:.4f}. Skipping this level."
+                    )
             
-            # Round the quantity based on precision and ensure it's above the minimum quantity
-            rounded_quantity = max(round(quantity / qty_precision) * qty_precision, min_qty)
-            
-            # Add the calculated and rounded quantity to the amounts list
-            amounts.append(rounded_quantity)
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Level {i+1} - Progressive drawdown order quantity: {rounded_quantity}")
-            
-            # Update cumulative position value after adding the order
-            cumulative_position_value += rounded_quantity * current_price
+        # Final check to ensure allocations do not exceed available_position_value
+        total_allocated = sum([qty * current_price for qty in amounts])
+        if total_allocated > available_position_value:
+            logging.error(
+                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Total allocated notional (${total_allocated:.4f}) exceeds available position value (${available_position_value:.4f}). Adjusting allocations."
+            )
+            # Optionally, implement further adjustment logic here
+        
+        logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Final allocations: {amounts}")
 
         return amounts
+
 
     def calculate_order_amounts_aggressive_drawdown(self, symbol: str, total_equity: float, 
                                                     best_ask_price: float, best_bid_price: float,
