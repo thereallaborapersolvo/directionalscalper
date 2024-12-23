@@ -12962,6 +12962,11 @@ class BybitStrategy(BaseStrategy):
         """
         Check the status of existing grid orders and place new orders for unfilled levels.
         """
+        logging.info(
+            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+            f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] func called with symbol={symbol}, side={side}, "
+            f"grid_levels={grid_levels}, amounts={amounts}, is_long={is_long}, filled_levels={filled_levels}"
+        )
         try:
             # Fetch open orders from the exchange
             open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -12971,22 +12976,40 @@ class BybitStrategy(BaseStrategy):
 
             # Clear existing grid before placing new orders
             if is_long:
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing existing long grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+                logging.info(
+                    f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                    f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing existing long grid for [{symbol}] before issuing new orders."
+                )
                 self.clear_grid(symbol, 'buy')
                 self.last_reissue_price_long[symbol] = current_price
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated last reissue price for long orders of [{symbol}] to {current_price}")
+                logging.info(
+                    f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                    f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated last reissue price for long orders of [{symbol}] to {current_price}"
+                )
             else:
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing existing short grid for [{symbol}] before issuing new orders. (line: {inspect.currentframe().f_lineno})")
+                logging.info(
+                    f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                    f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Clearing existing short grid for [{symbol}] before issuing new orders."
+                )
                 self.clear_grid(symbol, 'sell')
                 self.last_reissue_price_short[symbol] = current_price
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated last reissue price for short orders of [{symbol}] to {current_price}")
+                logging.info(
+                    f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                    f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Updated last reissue price for short orders of [{symbol}] to {current_price}"
+                )
 
             # Clear the filled_levels set before placing new orders
             filled_levels.clear()
 
             # Add logging to verify types before the zip operation
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside issue_grid_orders - Type of grid_levels: {type(grid_levels)}, Value: {grid_levels}")
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside issue_grid_orders - Type of amounts: {type(amounts)}, Value: {amounts}")
+            logging.info(
+                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside issue_grid_orders - Type of grid_levels: {type(grid_levels)}, Value: {grid_levels}"
+            )
+            logging.info(
+                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Inside issue_grid_orders - Type of amounts: {type(amounts)}, Value: {amounts}"
+            )
 
             # Ensure grid_levels and amounts are lists
             assert isinstance(grid_levels, list), f"Expected grid_levels to be a list, but got {type(grid_levels)}"
@@ -13008,18 +13031,36 @@ class BybitStrategy(BaseStrategy):
                     try:
                         order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
                         if order and 'id' in order:
-                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placed {side} order at level {level} for [{symbol}] with amount {amount}")
+                            logging.info(
+                                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                                f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Placed {side} order at level {level} for [{symbol}] with amount {amount}. Order ID: {order['id']}"
+                            )
                             filled_levels.add(level)  # Add the level to filled_levels
                         else:
-                            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to place {side} order at level {level} for [{symbol}] with amount {amount}")
+                            logging.warning(
+                                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                                f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Failed to place {side} order at level {level} for [{symbol}] with amount {amount}. Response: {order}"
+                            )
                     except Exception as e:
-                        logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception when placing {side} order at level {level} for [{symbol}]: {e}")
+                        logging.error(
+                            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                            f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception when placing {side} order at level {level} for [{symbol}]: {e}"
+                        )
                 else:
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping {side} order at level {level} for [{symbol}] as it already exists.")
+                    logging.info(
+                        f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                        f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping {side} order at level {level} for [{symbol}] as it already exists."
+                    )
 
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side.capitalize()} grid orders issued for unfilled levels.")
+            logging.info(
+                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] {side.capitalize()} grid orders issued for unfilled levels."
+            )
         except Exception as e:
-            logging.error(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception in issue_grid_orders: {e}")
+            logging.error(
+                f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exception in issue_grid_orders: {e}"
+            )
 
     def cancel_grid_orders(self, symbol: str, side: str):
         try:
