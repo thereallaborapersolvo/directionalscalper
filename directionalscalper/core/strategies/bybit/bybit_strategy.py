@@ -13024,12 +13024,44 @@ class BybitStrategy(BaseStrategy):
 
             # Place new grid orders for unfilled levels
             for level, amount in zip(grid_levels, amounts):
-                order_exists = any(order['price'] == level and order['side'].lower() == side.lower() for order in open_orders)
+                # **Enhanced Logging: Before Each Order Placement**
+                logging.debug(
+                    f"Attempting to place {side} order for [{symbol}]: Level={level}, Amount={amount}"
+                )
+
+                # **Check if the amount is 0.0 before proceeding**
+                if amount == 0.0:
+                    logging.info(
+                        f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                        f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping {side} order at level {level} for [{symbol}] due to 0.0 amount."
+                    )
+                    continue  # Skip to the next iteration without placing the order
+
+                order_exists = any(
+                    order['price'] == level and order['side'].lower() == side.lower() for order in open_orders
+                )
                 if not order_exists:
                     order_link_id = self.generate_order_link_id(symbol, side, level)
                     position_idx = 1 if is_long else 2
                     try:
-                        order = self.exchange.create_tagged_limit_order_bybit(symbol, side, amount, level, positionIdx=position_idx, orderLinkId=order_link_id)
+                        # **Detailed Logging Before API Call**
+                        logging.info(
+                            f"Placing {side} limit order for [{symbol}] at level {level} with amount {amount}. "
+                            f"OrderLinkId: {order_link_id}, PositionIdx: {position_idx}"
+                        )
+                        #==========
+                        order = self.exchange.create_tagged_limit_order_bybit(
+                            symbol, side, amount, level,
+                            positionIdx=position_idx,
+                            orderLinkId=order_link_id
+                        )
+                        #==========
+                        # logging.info(
+                        #     f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
+                        #     f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] DEBUG DEBUG DEBUG - Actual order placement skipped."
+                        # )
+                        #==========
+
                         if order and 'id' in order:
                             logging.info(
                                 f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, "
