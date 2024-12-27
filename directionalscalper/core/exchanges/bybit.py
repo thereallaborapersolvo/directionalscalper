@@ -10,6 +10,7 @@ from ccxt.base.errors import RateLimitExceeded, NetworkError
 import ccxt
 import traceback
 from directionalscalper.core.strategies.logger import Logger
+import inspect
 
 from rate_limit import RateLimit
 
@@ -247,7 +248,7 @@ class BybitExchange(Exchange):
                     price=price,
                     params={**params, 'positionIdx': positionIdx}  # Pass the 'positionIdx' parameter here
                 )
-                logging.info(f"Exchange Response for [{symbol}]: {order}")
+                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exchange Response for [{symbol}]: {order}")
                 return order
             else:
                 logging.info(f"side {side} does not exist")
@@ -304,6 +305,8 @@ class BybitExchange(Exchange):
 
             # Merge provided params with default parameters
             params = {**params, "reduceOnly": reduce_only, "postOnly": True, "positionIdx": positionIdx}
+            # Log the parameters passed to the function
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Creating limit TP order with parameters: symbol={symbol}, side={side}, qty={qty}, price={price}, reduce_only={reduce_only}, positionIdx={positionIdx}, params={params}")
 
             # Create the limit order with the appropriate parameters
             order = self.exchange.create_order(
@@ -314,7 +317,7 @@ class BybitExchange(Exchange):
                 price=price,
                 params=params
             )
-            logging.info(f"Exchange Response for [{symbol}]: {order}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Exchange Response for [{symbol}]: {order}")
             return order
 
         except Exception as e:
@@ -1087,7 +1090,7 @@ class BybitExchange(Exchange):
                 break
 
     def create_take_profit_order_bybit(self, symbol, order_type, side, amount, price=None, positionIdx=1, reduce_only=True):
-        logging.info(f"Calling create_take_profit_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calling create_take_profit_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
         if order_type == 'limit':
             if price is None:
                 raise ValueError("A price must be specified for a limit order")
@@ -1099,7 +1102,7 @@ class BybitExchange(Exchange):
             raise ValueError(f"Unsupported order type: {order_type}")
         
     def create_normal_take_profit_order_bybit(self, symbol, order_type, side, amount, price=None, positionIdx=1, reduce_only=True):
-        logging.info(f"Calling create_normal_take_profit_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calling create_normal_take_profit_order_bybit with symbol={symbol}, order_type={order_type}, side={side}, amount={amount}, price={price}")
         if order_type == 'limit':
             if price is None:
                 raise ValueError("A price must be specified for a limit order")
@@ -1170,7 +1173,7 @@ class BybitExchange(Exchange):
         try:
             # Call the updated cancel_order method
             result = self.exchange.cancel_order(id=order_id, symbol=symbol)
-            logging.info(f"Canceled order - ID: {order_id}, Response: {result}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Canceled order - ID: {order_id}, Response: {result}")
         except Exception as e:
             logging.info(f"Error occurred in cancel_order_by_id: {e}")
            
@@ -1191,7 +1194,7 @@ class BybitExchange(Exchange):
                 ):
                     order_id = order['id']  # Assuming 'id' is the standard format expected by cancel_order
                     self.exchange.cancel_order(order_id, symbol)
-                    logging.info(f"Canceled take profit order - ID: {order_id}")
+                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]]Canceled take profit order - ID: {order_id}")
 
         except Exception as e:
             logging.info(f"An unknown error occurred in cancel_take_profit_orders: {e}")
