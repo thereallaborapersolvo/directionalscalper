@@ -188,6 +188,8 @@ class Exchange(BaseModel):
     api_secret: str
     passphrase: Optional[str] = None
     symbols_allowed: int = 12
+    symbols_allowed_long: int = 5
+    symbols_allowed_short: int = 2
 
 class Logger(BaseModel):
     level: str = "info"
