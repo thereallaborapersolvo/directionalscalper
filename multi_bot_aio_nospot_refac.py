@@ -198,7 +198,7 @@ class DirectionalMarketMaker:
 
     def run_strategy(self, symbol, strategy_name, config, account_name,
                     symbols_to_trade=None, rotator_symbols_standardized=None,
-                    mfirsi_signal=None, action=None, thread_id=None):  # Added thread_id parameter
+                    mfirsi_signal=None, action=None, thread_id=None):
         """
         COMMENT: This is called (e.g. by run_bot) once we have a signal to open a position.
         It picks the correct class in 'strategy_classes', instantiates it, and calls .run(...).
@@ -206,11 +206,21 @@ class DirectionalMarketMaker:
         logging.info(f"[Thread-{thread_id}] [[{symbol}]] Received rotator symbols in run_strategy...")
         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Received rotator symbols in run_strategy ({strategy_name}) for {symbol} ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
         
-        symbols_allowed = next((exch.symbols_allowed for exch in config.exchanges
+        exchange_config = next((exch for exch in config.exchanges
                                 if exch.name == self.exchange_name and exch.account_name == account_name), None)
-
-        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Matched exchange: {self.exchange_name}, account: {account_name}. Symbols allowed: {symbols_allowed}")
         
+        if not exchange_config:
+            raise ValueError(f"Exchange {self.exchange_name} with account {account_name} not found in the configuration file.")
+
+        # Use getattr with default values
+        symbols_allowed = getattr(exchange_config, 'symbols_allowed', 10)
+        symbols_allowed_long = getattr(exchange_config, 'symbols_allowed_long', symbols_allowed)
+        symbols_allowed_short = getattr(exchange_config, 'symbols_allowed_short', symbols_allowed)
+
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Matched exchange: {self.exchange_name}, account: {account_name}. symbols_allowed: {symbols_allowed}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Matched exchange: {self.exchange_name}, account: {account_name}. symbols_allowed_long: {symbols_allowed_long}")
+        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Matched exchange: {self.exchange_name}, account: {account_name}. symbols_allowed_short: {symbols_allowed_short}")
+
         if symbols_to_trade:
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Calling run method with symbols: {symbols_to_trade}")
             try:
@@ -379,7 +389,8 @@ def run_bot(symbol, args, market_maker, manager, account_name,
     #     logging.info(f"[Thread-{thread_id}] (caller: {inspect.stack()[1].function}, "
     #                 f"func: {inspect.currentframe().f_code.co_name}, "
     #                 f"line: {inspect.currentframe().f_lineno}) [[{symbol}]] {message}")
-
+    
+    logging.info(f"[Thread-{thread_id}] [[{symbol}]] Starting run_bot for {symbol} with action {action}.")
     try:
         if not args.config.startswith('configs/'):
             config_file_path = Path('configs/' + args.config)
@@ -469,6 +480,7 @@ def run_bot(symbol, args, market_maker, manager, account_name,
             )
             future.result()
 
+        logging.info(f"[Thread-{thread_id}] [[{symbol}]] Successfully ran strategy.")
     except Exception as e:
         logging.info(f"[Thread-{thread_id}] [[{symbol}]] (Action-{action_id}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name},line: {inspect.currentframe().f_lineno}) An error occurred in run_bot for symbol {symbol}: {e}")
         logging.error(traceback.format_exc())
@@ -485,7 +497,7 @@ def run_bot(symbol, args, market_maker, manager, account_name,
         logging.info(f"[Thread-{thread_id}] [[{symbol}]] (Action-{action_id}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name},line: {inspect.currentframe().f_lineno}) Thread for symbol {symbol} with action {action} has completed.")
         thread_completed.set()
 
-def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
+def bybit_auto_rotation(args, market_maker, manager, symbols_allowed, symbols_allowed_long, symbols_allowed_short):
     """
     COMMENT: This is the main loop for auto-rotating symbols on Bybit (derivatives).
     It creates two thread pools:
@@ -498,8 +510,8 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
     global active_symbols, active_long_symbols, active_short_symbols
     global last_rotator_update_time, unique_active_symbols
 
-    max_workers_signals = 1
-    max_workers_trading = 1
+    max_workers_signals = 2
+    max_workers_trading = 2
 
     # COMMENT: Two separate pools, each with 1 worker.
     signal_executor = ThreadPoolExecutor(max_workers=max_workers_signals)
@@ -558,221 +570,425 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
 
     processed_symbols = set()
 
+    loop_counter = 0
     while True:
+        loop_counter += 1
+        logging.info(f"(loop #{loop_counter}) Starting loop iteration.")
+
         try:
             current_time = time.time()
             open_position_data = fetch_open_positions()
             open_position_symbols = {standardize_symbol(pos['symbol']) for pos in open_position_data}
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open position symbols: {open_position_symbols}")
+            logging.info(f"(loop #{loop_counter}) Open position symbols: {open_position_symbols}")
 
             current_long_positions = sum(1 for pos in open_position_data if pos['side'].lower() == 'long')
             current_short_positions = sum(1 for pos in open_position_data if pos['side'].lower() == 'short')
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current long positions: {current_long_positions}, Current short positions: {current_short_positions}")
+            logging.info(f"(loop #{loop_counter}) Current long positions: {current_long_positions}, Current short positions: {current_short_positions}")
 
-            # COMMENT: update_active_symbols synchronizes local sets like active_symbols
-            # to what we see in open_position_symbols from the exchange.
             update_active_symbols(open_position_symbols)
             unique_active_symbols = active_long_symbols.union(active_short_symbols)
 
-            # COMMENT: Possibly auto-enable graceful_stop if we hit the limit
             if config_auto_graceful_stop:
-                # If we have as many as the limit, enable graceful_stop_long
-
                 if (current_long_positions >= symbols_allowed or len(unique_active_symbols) >= symbols_allowed) and not graceful_stop_long:
                     graceful_stop_long = True
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) GS Auto Check: Automatically enabled graceful stop for long positions. Current long positions: {current_long_positions}, Unique active symbols: {len(unique_active_symbols)}")
-                # If we now have fewer than the limit, revert to config
+                    logging.info(f"(loop #{loop_counter}) GS Auto Check: Automatically enabled graceful stop for long.")
                 elif current_long_positions < symbols_allowed and len(unique_active_symbols) < symbols_allowed and graceful_stop_long:
                     graceful_stop_long = config_graceful_stop_long
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) GS Auto Check: Reverting to config value for graceful stop long. Current long positions: {current_long_positions}, Unique active symbols: {len(unique_active_symbols)}, Config value: {config_graceful_stop_long}")
+                    logging.info(f"(loop #{loop_counter}) GS Auto Check: Reverted graceful stop long to config value.")
                 else:
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) GS Auto Check: Current long positions: {current_long_positions}, Unique active symbols: {len(unique_active_symbols)}. Graceful stop long: {graceful_stop_long}")
+                    logging.info(f"(loop #{loop_counter}) GS Auto Check: Current long positions: {current_long_positions}, graceful_stop_long: {graceful_stop_long}")
 
-                # Similarly for short positions...
                 if (current_short_positions >= symbols_allowed or len(unique_active_symbols) >= symbols_allowed) and not graceful_stop_short:
                     graceful_stop_short = True
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) GS Auto Check: Automatically enabled graceful stop for short positions. Current short positions: {current_short_positions}, Unique active symbols: {len(unique_active_symbols)}")
+                    logging.info(f"(loop #{loop_counter}) GS Auto Check: Automatically enabled graceful stop for short.")
                 elif current_short_positions < symbols_allowed and len(unique_active_symbols) < symbols_allowed and graceful_stop_short:
                     graceful_stop_short = config_graceful_stop_short
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) GS Auto Check: Reverting to config value for graceful stop short. Current short positions: {current_short_positions}, Unique active symbols: {len(unique_active_symbols)}, Config value: {config_graceful_stop_short}")
+                    logging.info(f"(loop #{loop_counter}) GS Auto Check: Reverted graceful stop short to config value.")
                 else:
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) GS Auto Check: Current short positions: {current_short_positions}, Unique active symbols: {len(unique_active_symbols)}. Graceful stop short: {graceful_stop_short}")
+                    logging.info(f"(loop #{loop_counter}) GS Auto Check: Current short positions: {current_short_positions}, graceful_stop_short: {graceful_stop_short}")
 
-            # COMMENT: If we haven't fetched rotator symbols recently, do it now.
             if not latest_rotator_symbols or current_time - last_rotator_update_time >= 60:
                 with general_rate_limiter:
                     latest_rotator_symbols = fetch_updated_symbols(args, manager, whitelist)
                 last_rotator_update_time = current_time
                 processed_symbols.clear()
                 symbols_to_log = list(latest_rotator_symbols)[:5]
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Refreshed latest rotator symbols: {symbols_to_log}...")
+                logging.info(f"(loop #{loop_counter}) Refreshed latest rotator symbols: {symbols_to_log}...")
             else:
-                logging.debug(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No refresh needed yet. Last update was at {last_rotator_update_time}, less than 60 seconds ago.")
+                logging.debug(f"(loop #{loop_counter}) No refresh needed yet. Last update was at {last_rotator_update_time}.")
 
-            # COMMENT: We acquire the lock before scheduling tasks that might modify shared sets.
             with thread_management_lock:
                 open_position_futures = []
                 signal_futures = []
 
-                # We sync open positions because the sets might have changed
+                # Update sets again inside lock, then see what's active
                 update_active_symbols(open_position_symbols)
                 unique_active_symbols = active_long_symbols.union(active_short_symbols)
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Active symbols updated. Long symbols allowed: {symbols_allowed}, Short symbols allowed: {symbols_allowed}")
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Active symbols: {active_symbols}")
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Unique active symbols: {unique_active_symbols}")
 
-                # 1) Process signals for existing open positions
+                logging.info(f"(loop #{loop_counter}) Active long symbols ({len(active_long_symbols)}): {active_long_symbols}")
+                logging.info(f"(loop #{loop_counter}) Active short symbols ({len(active_short_symbols)}): {active_short_symbols}")
+                logging.info(f"(loop #{loop_counter}) unique_active_symbols ({len(unique_active_symbols)}): {unique_active_symbols}")
+                logging.info(f"(loop #{loop_counter}) trading_executor queue size: {trading_executor._work_queue.qsize() if hasattr(trading_executor, '_work_queue') else 'N/A'}")
+                logging.info(f"(loop #{loop_counter}) signal_executor queue size: {signal_executor._work_queue.qsize() if hasattr(signal_executor, '_work_queue') else 'N/A'}")
+
+                # ---------------------------------------------------------
+                # PART 1: For each symbol that truly has an open position
+                # ---------------------------------------------------------
                 for symbol in open_position_symbols.copy():
-                    has_open_long = any(pos['side'].lower() == 'long' for pos in open_position_data if standardize_symbol(pos['symbol']) == symbol)
-                    has_open_short = any(pos['side'].lower() == 'short' for pos in open_position_data if standardize_symbol(pos['symbol']) == symbol)
+                    has_open_long = any(
+                        pos['side'].lower() == 'long'
+                        and standardize_symbol(pos['symbol']) == symbol
+                        for pos in open_position_data
+                    )
+                    has_open_short = any(
+                        pos['side'].lower() == 'short'
+                        and standardize_symbol(pos['symbol']) == symbol
+                        for pos in open_position_data
+                    )
 
-                    long_thread_running = symbol in long_threads and long_threads[symbol][0].is_alive()
-                    short_thread_running = symbol in short_threads and short_threads[symbol][0].is_alive()
+                    # Always submit the "signal check" for open positions
+                    open_position_futures.append(
+                        signal_executor.submit(
+                            process_signal_for_open_position,
+                            symbol,
+                            args, market_maker, manager,
+                            symbols_allowed, symbols_allowed_long, symbols_allowed_short,
+                            open_position_data,
+                            long_mode, short_mode,
+                            graceful_stop_long, graceful_stop_short
+                        )
+                    )
 
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long thread running for {symbol}: {long_thread_running}")
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short thread running for {symbol}: {short_thread_running}")
+                    # -----------------------
+                    # (A) Checking LONG side
+                    # -----------------------
+                    if has_open_long:
+                        existing_long_entry = long_threads.get(symbol)
+                        if existing_long_entry:
+                            thread_obj, thread_completed_evt = existing_long_entry
+                            still_alive = thread_obj.is_alive()
+                            already_done = thread_completed_evt.is_set()
+                            if still_alive or not already_done:
+                                thread_id = thread_obj.ident if thread_obj.ident else "Unknown"
+                                logging.info(
+                                    f"(loop #{loop_counter}) Skipping re-submission of LONG thread for {symbol}, "
+                                    f"previous thread (ID: {thread_id}) is still running or not cleaned up."
+                                )
+                            else:
+                                # Old thread is done => remove from dict
+                                del long_threads[symbol]
+                                # Now we can safely submit a new thread if needed:
+                                open_position_futures.append(
+                                    trading_executor.submit(
+                                        start_thread_for_open_symbol,
+                                        symbol,
+                                        args, 
+                                        manager,
+                                        "long",
+                                        has_open_long=True,
+                                        has_open_short=False,
+                                        long_mode=long_mode,
+                                        short_mode=short_mode,
+                                        graceful_stop_long=graceful_stop_long,
+                                        graceful_stop_short=graceful_stop_short,
+                                        symbols_allowed=symbols_allowed,
+                                        symbols_allowed_long=symbols_allowed_long,
+                                        symbols_allowed_short=symbols_allowed_short
+                                    )
+                                )
+                                active_long_symbols.add(symbol)
+                                unique_active_symbols.add(symbol)
+                                logging.info(f"(loop #{loop_counter}) Submitted long thread for open symbol {symbol}.")
+                                time.sleep(2)
+                        else:
+                            # No previous record => brand-new thread
+                            open_position_futures.append(
+                                trading_executor.submit(
+                                    start_thread_for_open_symbol,
+                                    symbol,
+                                    args, manager,
+                                    "long",
+                                    has_open_long=True,
+                                    has_open_short=False,
+                                    long_mode=long_mode,
+                                    short_mode=short_mode,
+                                    graceful_stop_long=graceful_stop_long,
+                                    graceful_stop_short=graceful_stop_short,
+                                    symbols_allowed=symbols_allowed,
+                                    symbols_allowed_long=symbols_allowed_long,
+                                    symbols_allowed_short=symbols_allowed_short
+                                )
+                            )
+                            active_long_symbols.add(symbol)
+                            unique_active_symbols.add(symbol)
+                            logging.info(f"(loop #{loop_counter}) Submitted long thread for open symbol {symbol}.")
+                            time.sleep(2)
 
-                    # We'll schedule a "signal processing" job for open positions
-                    open_position_futures.append(signal_executor.submit(
-                        process_signal_for_open_position, 
-                        symbol, args, market_maker, manager, symbols_allowed, open_position_data, long_mode, short_mode, graceful_stop_long, graceful_stop_short
-                    ))
+                    # ------------------------
+                    # (B) Checking SHORT side
+                    # ------------------------
+                    if has_open_short:
+                        existing_short_entry = short_threads.get(symbol)
+                        if existing_short_entry:
+                            thread_obj, thread_completed_evt = existing_short_entry
+                            still_alive = thread_obj.is_alive()
+                            already_done = thread_completed_evt.is_set()
+                            if still_alive or not already_done:
+                                thread_id = thread_obj.ident if thread_obj.ident else "Unknown"
+                                logging.info(
+                                    f"(loop #{loop_counter}) Skipping re-submission of SHORT thread for {symbol}, "
+                                    f"previous thread (ID: {thread_id}) is still running or not cleaned up."
+                                )
+                            else:
+                                # Old thread is done => remove from dict
+                                del short_threads[symbol]
+                                # Now we can safely submit a new thread if needed:
+                                open_position_futures.append(
+                                    trading_executor.submit(
+                                        start_thread_for_open_symbol,
+                                        symbol,
+                                        args, manager,
+                                        "short",
+                                        has_open_long=False,
+                                        has_open_short=True,
+                                        long_mode=long_mode,
+                                        short_mode=short_mode,
+                                        graceful_stop_long=graceful_stop_long,
+                                        graceful_stop_short=graceful_stop_short,
+                                        symbols_allowed=symbols_allowed,
+                                        symbols_allowed_long=symbols_allowed_long,
+                                        symbols_allowed_short=symbols_allowed_short
+                                    )
+                                )
+                                active_short_symbols.add(symbol)
+                                unique_active_symbols.add(symbol)
+                                logging.info(f"(loop #{loop_counter}) Submitted short thread for open symbol {symbol}.")
+                                time.sleep(2)
+                        else:
+                            # No previous record => brand-new thread
+                            open_position_futures.append(
+                                trading_executor.submit(
+                                    start_thread_for_open_symbol,
+                                    symbol,
+                                    args, manager,
+                                    "short",
+                                    has_open_long=False,
+                                    has_open_short=True,
+                                    long_mode=long_mode,
+                                    short_mode=short_mode,
+                                    graceful_stop_long=graceful_stop_long,
+                                    graceful_stop_short=graceful_stop_short,
+                                    symbols_allowed=symbols_allowed,
+                                    symbols_allowed_long=symbols_allowed_long,
+                                    symbols_allowed_short=symbols_allowed_short
+                                )
+                            )
+                            active_short_symbols.add(symbol)
+                            unique_active_symbols.add(symbol)
+                            logging.info(f"(loop #{loop_counter}) Submitted short thread for open symbol {symbol}.")
+                            time.sleep(2)
 
-                    # If there's an open long, but no thread, we start one
-                    if has_open_long and not long_thread_running:
-                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbol {symbol} has open long: {has_open_long} and long thread not running {long_thread_running}")
-                        open_position_futures.append(trading_executor.submit(
-                            start_thread_for_open_symbol, 
-                            symbol, args, manager, "long", True, False, 
-                            long_mode, short_mode, graceful_stop_long, graceful_stop_short
-                        ))
-                        # Update sets to reflect a new thread is started
-                        active_long_symbols.add(symbol)
-                        unique_active_symbols.add(symbol)
-                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Submitted long thread for open symbol {symbol}. Has open long: {has_open_long}.")
-                        time.sleep(2)
-
-                    # If there's an open short, but no thread, do similarly
-                    if has_open_short and not short_thread_running:
-                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Open symbol {symbol} has open short: {has_open_short} and short thread not running {short_thread_running}")
-                        open_position_futures.append(trading_executor.submit(
-                            start_thread_for_open_symbol, 
-                            symbol, args, manager, "short", False, True, 
-                            long_mode, short_mode, graceful_stop_long, graceful_stop_short
-                        ))
-                        active_short_symbols.add(symbol)
-                        unique_active_symbols.add(symbol)
-                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Submitted short thread for open symbol {symbol}. Has open short: {has_open_short}.")
-                        time.sleep(2)
-
-                # 2) Now process brand-new symbols from the rotator if we have capacity
+                # ---------------------------------------------------------
+                # PART 2: For new (non-open) symbols if capacity remains
+                # ---------------------------------------------------------
                 if len(unique_active_symbols) < symbols_allowed:
                     symbols_to_process = whitelist if target_coins_mode else latest_rotator_symbols
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Unique active symbols are less than allowed, processing symbols from {'whitelist' if target_coins_mode else 'latest rotator symbols'}")
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbols to process ({len(symbols_to_process)}):{list(symbols_to_process)[:5]}")
-
+                    logging.info(f"(loop #{loop_counter}) unique_active_symbols below limit. Checking new symbols.")
                     for symbol in symbols_to_process:
-                        # If we already processed this symbol or it's in unique_active_symbols, skip
                         if symbol not in processed_symbols and symbol not in unique_active_symbols:
                             if len(unique_active_symbols) >= symbols_allowed:
-                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Reached symbols_allowed limit. Stopping processing of new symbols.")
+                                logging.info(f"(loop #{loop_counter}) Reached symbols_allowed limit. Stopping new symbols.")
                                 break
-
-                            can_open_long = len(active_long_symbols) < symbols_allowed and not graceful_stop_long
-                            can_open_short = len(active_short_symbols) < symbols_allowed and not graceful_stop_short
+                            # can_open_long = len(active_long_symbols) < symbols_allowed and not graceful_stop_long
+                            # can_open_short = len(active_short_symbols) < symbols_allowed and not graceful_stop_short
+                            can_open_long = (len(active_long_symbols) < symbols_allowed_long) and (len(unique_active_symbols) < symbols_allowed) and not graceful_stop_long
+                            can_open_short = (len(active_short_symbols) < symbols_allowed_short) and (len(unique_active_symbols) < symbols_allowed) and not graceful_stop_short
 
                             if (can_open_long and long_mode) or (can_open_short and short_mode):
-                                # Schedule a signal job for the new symbol
-                                signal_futures.append(signal_executor.submit(
-                                    process_signal,
-                                    symbol, args, market_maker, manager,
-                                    symbols_allowed, open_position_data,
-                                    False,  # is_open_position=False
-                                    can_open_long, can_open_short,
-                                    graceful_stop_long, graceful_stop_short
-                                ))
-                                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Submitted signal processing for new symbol {symbol}.")
+                                signal_futures.append(
+                                    signal_executor.submit(
+                                        process_signal,
+                                        symbol,
+                                        args, market_maker, manager,
+                                        symbols_allowed, symbols_allowed_long, symbols_allowed_short, open_position_data,
+                                        False,
+                                        can_open_long, can_open_short,
+                                        graceful_stop_long, graceful_stop_short
+                                    )
+                                )
+                                logging.info(f"(loop #{loop_counter}) Submitted signal processing for new symbol {symbol}.")
                                 processed_symbols.add(symbol)
-                                unique_active_symbols.add(symbol)  # Immediately update unique_active_symbols
+                                unique_active_symbols.add(symbol)
                                 time.sleep(2)
 
-                logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Submitted signal processing for open position symbols: {open_position_symbols}.")
-                # COMMENT: Actually wait for the tasks (both open_position_futures + signal_futures)
+                logging.info(f"(loop #{loop_counter}) Submitted signal processing for open position symbols: {open_position_symbols}.")
                 process_futures(open_position_futures + signal_futures)
 
-                # Clean up any threads that are done
+                # ---------------------------------------------------------
+                # PART 3: Cleanup for completed threads
+                # ---------------------------------------------------------
                 completed_symbols = []
-                for symbol, (thread, thread_completed) in {**long_threads, **short_threads}.items():
+                all_threads = {**long_threads, **short_threads}  # merge dicts
+                for sym, (thread, thread_completed) in all_threads.items():
                     if thread_completed.is_set():
-                        thread.join()
-                        completed_symbols.append(symbol)
+                        thread.join()  # ensure it’s fully finished
+                        completed_symbols.append(sym)
 
-                # For each completed symbol, we remove them from sets
-                for symbol in completed_symbols:
-                    active_symbols.discard(symbol)
-                    if symbol in long_threads:
-                        del long_threads[symbol]
-                    if symbol in short_threads:
-                        del short_threads[symbol]
-                    active_long_symbols.discard(symbol)
-                    active_short_symbols.discard(symbol)
-                    unique_active_symbols.discard(symbol)
-                    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Thread and symbol management completed for: {symbol}")
+                for sym in completed_symbols:
+                    active_symbols.discard(sym)
+                    if sym in long_threads:
+                        del long_threads[sym]
+                    if sym in short_threads:
+                        del short_threads[sym]
+                    active_long_symbols.discard(sym)
+                    active_short_symbols.discard(sym)
+                    unique_active_symbols.discard(sym)
+                    logging.info(f"(loop #{loop_counter}) Cleaned up completed symbol {sym}.")
 
         except Exception as e:
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception caught in bybit_auto_rotation: {str(e)}")
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}, traceback: {traceback.format_exc()})")
+            logging.error(f"(loop #{loop_counter}) Exception in bybit_auto_rotation: {str(e)}")
+            logging.debug(f"(loop #{loop_counter}) Traceback: {traceback.format_exc()}")
 
-
-        # Sleep 1 second before repeating
         time.sleep(1)
 
-def process_signal_for_open_position(symbol, args, market_maker, manager, symbols_allowed, open_position_data, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
-    market_maker.manager = manager
+def process_signal_for_open_position(
+    symbol,
+    args,
+    market_maker,
+    manager,
+    symbols_allowed,
+    symbols_allowed_long,
+    symbols_allowed_short,
+    open_position_data,
+    long_mode,
+    short_mode,
+    graceful_stop_long,
+    graceful_stop_short
+):
+    try:
+        market_maker.manager = manager
 
-    # First, check if we need to initialize the strategy
-    if market_maker.strategy is None:
-        config_file_path = Path('configs/' + args.config) if not args.config.startswith('configs/') else Path(args.config)
-        account_file_path = Path('configs/account.json')
-        config = load_config(config_file_path, account_file_path)
-        
-        strategy_classes = {
-            'qstrendobdynamictp': gridbased.BybitQuickScalpTrendDynamicTP,
-            'qsgridob': gridbased.LinearGridBaseFutures
-        }
-        
-        strategy_class = strategy_classes.get(args.strategy.lower())
-        if strategy_class:
-            market_maker.strategy = strategy_class(market_maker.exchange, market_maker.manager, config.bot, symbols_allowed)
+        # Initialize the strategy if not already initialized
+        if market_maker.strategy is None:
+            config_file_path = (
+                Path('configs/' + args.config)
+                if not args.config.startswith('configs/')
+                else Path(args.config)
+            )
+            account_file_path = Path('configs/account.json')
+            config = load_config(config_file_path, account_file_path)
 
-    # Now check for grid creation, with a safe check
-    if hasattr(market_maker, 'strategy') and market_maker.strategy is not None:
-        if not market_maker.strategy.should_attempt_grid_creation(symbol):
-            logging.info(f"[[{symbol}]] Skipping grid creation, symbol in cooldown period or position exceeding limits")
+            strategy_classes = {
+                'qstrendobdynamictp': gridbased.BybitQuickScalpTrendDynamicTP,
+                'qsgridob': gridbased.LinearGridBaseFutures
+            }
+
+            strategy_class = strategy_classes.get(args.strategy.lower())
+            if strategy_class:
+                market_maker.strategy = strategy_class(
+                    market_maker.exchange,
+                    market_maker.manager,
+                    config.bot,
+                    symbols_allowed
+                )
+            else:
+                logging.error(f"[[{symbol}]] Unknown strategy: {args.strategy}")
+                return False
+
+        # Check if grid creation should be attempted
+        if hasattr(market_maker, 'strategy') and market_maker.strategy is not None:
+            if not market_maker.strategy.should_attempt_grid_creation(symbol):
+                logging.info(
+                    f"[[{symbol}]] Skipping grid creation, symbol in cooldown period or position exceeding limits"
+                )
+                return False
+        else:
+            logging.error(f"[[{symbol}]] Strategy not properly initialized")
             return False
-    else:
-        logging.error(f"[[{symbol}]] Strategy not properly initialized")
+
+        # Acquire rate limiter and get the current signal
+        with general_rate_limiter:
+            signal = market_maker.get_signal(symbol)
+
+        # If the signal is neutral, revert to the current position's direction
+        if signal == "neutral":
+            # Handle open_position_data as a list
+            if isinstance(open_position_data, list) and len(open_position_data) > 0:
+                # Assuming the first element represents the current position
+                current_position = open_position_data[0]
+                
+                # Log the entire current_position for inspection
+                logging.debug(
+                    f"[[{symbol}]] Current position data: {current_position}"
+                )
+
+                # Attempt to extract 'side' from the 'info' dictionary
+                info = current_position.get('info', {})
+                position_side_raw = info.get('side', '').lower()
+
+                # Define mapping from various descriptors to 'long' or 'short'
+                position_mapping = {
+                    'buy': 'long',
+                    'sell': 'short',
+                    'long': 'long',
+                    'short': 'short'
+                }
+
+                # Apply mapping if necessary
+                mapped_position_type = position_mapping.get(position_side_raw, position_side_raw)
+
+                if mapped_position_type in ['long', 'short']:
+                    logging.info(
+                        f"[[{symbol}]] Neutral signal received. Reverting to current position type: {mapped_position_type}"
+                    )
+                    signal = mapped_position_type
+                else:
+                    logging.error(
+                        f"[[{symbol}]] Neutral signal received but position type is unknown: '{position_side_raw}'. Current position data: {current_position}"
+                    )
+                    return False
+            else:
+                logging.error(
+                    f"[[{symbol}]] Neutral signal received but no open position data available or data is not a list."
+                )
+                return False
+
+        logging.info(
+            f"[[{symbol}]] Processing signal for open position symbol {symbol}. Signal: {signal}"
+        )
+
+        # Call handle_signal with the determined signal
+        action_taken = handle_signal(
+            symbol,
+            args,
+            manager,
+            signal,
+            open_position_data,
+            symbols_allowed,
+            symbols_allowed_long,
+            symbols_allowed_short,
+            True,
+            long_mode,
+            short_mode,
+            graceful_stop_long,
+            graceful_stop_short
+        )
+
+        if action_taken:
+            logging.info(f"[[{symbol}]] Action taken for open position symbol {symbol}.")
+        else:
+            logging.info(f"[[{symbol}]] No action taken for open position symbol {symbol}.")
+
+        return action_taken
+
+    except Exception as e:
+        logging.debug(
+            f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) "
+            f"Exception occurred: {e}\n{traceback.format_exc()}"
+        )
         return False
 
-    with general_rate_limiter:
-        signal = market_maker.get_signal(symbol)
-    
-    if signal == "neutral":
-        logging.info(f"[[{symbol}]] Skipping signal processing for {symbol} due to neutral signal.")
-        return False
-
-    logging.info(f"[[{symbol}]] Processing signal for open position symbol {symbol}. Signal: {signal}")
-
-    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, True, long_mode, short_mode, graceful_stop_long, graceful_stop_short)
-
-    if action_taken:
-        logging.info(f"[[{symbol}]] Action taken for open position symbol {symbol}.")
-    else:
-        logging.info(f"[[{symbol}]] No action taken for open position symbol {symbol}.")
-
-    return action_taken
-
-def process_signal(symbol, args, market_maker, manager, symbols_allowed, open_position_data, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+def process_signal(symbol, args, market_maker, manager, symbols_allowed, symbols_allowed_long, symbols_allowed_short, open_position_data, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
     market_maker.manager = manager
     signal = market_maker.get_signal(symbol)  # Use the appropriate signal based on the entry_signal_type
 
@@ -782,7 +998,7 @@ def process_signal(symbol, args, market_maker, manager, symbols_allowed, open_po
 
     logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Processing signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. Signal: {signal}")
 
-    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short)
+    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, symbols_allowed_long, symbols_allowed_short, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short)
 
     if action_taken:
         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol}.")
@@ -790,97 +1006,97 @@ def process_signal(symbol, args, market_maker, manager, symbols_allowed, open_po
         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol} due to existing position or lack of clear signal.")
     return action_taken
 
-def handle_signal_targetcoin(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
-    global unique_active_symbols, active_long_symbols, active_short_symbols
+# def handle_signal_targetcoin(symbol, args, manager, signal, open_position_data, symbols_allowed, symbols_allowed_long, symbols_allowed_short, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+#     global unique_active_symbols, active_long_symbols, active_short_symbols
 
-    # Log receipt of the signal and handle neutral signals early
-    if signal == "neutral":
-        logging.info(f"Received neutral signal for symbol {symbol}. Checking open positions.")
-        action_taken = start_thread_for_open_symbol(symbol, args, manager, signal, 
-                                                    has_open_long=symbol in active_long_symbols, 
-                                                    has_open_short=symbol in active_short_symbols, 
-                                                    long_mode=long_mode, short_mode=short_mode, 
-                                                    graceful_stop_long=graceful_stop_long, 
-                                                    graceful_stop_short=graceful_stop_short)
-        return action_taken
+#     # Log receipt of the signal and handle neutral signals early
+#     if signal == "neutral":
+#         logging.info(f"Received neutral signal for symbol {symbol}. Checking open positions.")
+#         action_taken = start_thread_for_open_symbol(symbol, args, manager, signal, 
+#                                                     has_open_long=symbol in active_long_symbols, 
+#                                                     has_open_short=symbol in active_short_symbols, 
+#                                                     long_mode=long_mode, short_mode=short_mode, 
+#                                                     graceful_stop_long=graceful_stop_long, 
+#                                                     graceful_stop_short=graceful_stop_short)
+#         return action_taken
 
-    # Gather open position symbols and log the current state
-    open_position_symbols = {standardize_symbol(pos['symbol']) for pos in open_position_data}
-    logging.info(f"Open position symbols: {open_position_symbols}")
+#     # Gather open position symbols and log the current state
+#     open_position_symbols = {standardize_symbol(pos['symbol']) for pos in open_position_data}
+#     logging.info(f"Open position symbols: {open_position_symbols}")
 
-    # Determine the type of signal (long/short)
-    signal_long = signal.lower() == "long"
-    signal_short = signal.lower() == "short"
+#     # Determine the type of signal (long/short)
+#     signal_long = signal.lower() == "long"
+#     signal_short = signal.lower() == "short"
 
-    # Log the status of the bot's current positions
-    current_long_positions = len(active_long_symbols)
-    current_short_positions = len(active_short_symbols)
-    logging.info(f"Handling signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. "
-                 f"Current long positions: {current_long_positions}. "
-                 f"Current short positions: {current_short_positions}. "
-                 f"Unique active symbols: {len(unique_active_symbols)}")
+#     # Log the status of the bot's current positions
+#     current_long_positions = len(active_long_symbols)
+#     current_short_positions = len(active_short_symbols)
+#     logging.info(f"Handling signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. "
+#                  f"Current long positions: {current_long_positions}. "
+#                  f"Current short positions: {current_short_positions}. "
+#                  f"Unique active symbols: {len(unique_active_symbols)}")
 
-    logging.info(f"Active long symbols: {active_long_symbols}")
-    logging.info(f"Active short symbols: {active_short_symbols}")
+#     logging.info(f"Active long symbols: {active_long_symbols}")
+#     logging.info(f"Active short symbols: {active_short_symbols}")
 
-    # Check if there are open long/short positions for the symbol
-    has_open_long = symbol in active_long_symbols
-    has_open_short = symbol in active_short_symbols
+#     # Check if there are open long/short positions for the symbol
+#     has_open_long = symbol in active_long_symbols
+#     has_open_short = symbol in active_short_symbols
 
-    # Log details about the current state and modes
-    logging.info(f"{'Open position' if is_open_position else 'New rotator'} symbol {symbol} - "
-                 f"Has open long: {has_open_long}, Has open short: {has_open_short}")
-    logging.info(f"Signal: {signal}, Long Mode: {long_mode}, Short Mode: {short_mode}")
+#     # Log details about the current state and modes
+#     logging.info(f"{'Open position' if is_open_position else 'New rotator'} symbol {symbol} - "
+#                  f"Has open long: {has_open_long}, Has open short: {has_open_short}")
+#     logging.info(f"Signal: {signal}, Long Mode: {long_mode}, Short Mode: {short_mode}")
 
-    # Flags to track if actions are taken
-    action_taken_long = False
-    action_taken_short = False
+#     # Flags to track if actions are taken
+#     action_taken_long = False
+#     action_taken_short = False
 
-    # Determine if the bot can add a new long/short symbol
-    can_add_new_long_symbol = current_long_positions < symbols_allowed
-    can_add_new_short_symbol = current_short_positions < symbols_allowed
+#     # Determine if the bot can add a new long/short symbol
+#     can_add_new_long_symbol = current_long_positions < symbols_allowed
+#     can_add_new_short_symbol = current_short_positions < symbols_allowed
 
-    # Handle long signals
-    if signal_long and long_mode:
-        if (can_add_new_long_symbol or symbol in unique_active_symbols) and not has_open_long:
-            if graceful_stop_long and not is_open_position:
-                logging.info(f"Skipping long signal for {symbol} due to graceful stop long enabled and no open long position.")
-            elif not (symbol in long_threads and long_threads[symbol][0].is_alive()):
-                logging.info(f"Starting long thread for symbol {symbol}.")
-                action_taken_long = start_thread_for_symbol(symbol, args, manager, signal, "long", has_open_long, has_open_short)
-            else:
-                logging.info(f"Long thread already running for symbol {symbol}. Skipping.")
-        else:
-            logging.info(f"Cannot open long position for {symbol}. Long positions limit reached or position already exists.")
+#     # Handle long signals
+#     if signal_long and long_mode:
+#         if (can_add_new_long_symbol or symbol in unique_active_symbols) and not has_open_long:
+#             if graceful_stop_long and not is_open_position:
+#                 logging.info(f"Skipping long signal for {symbol} due to graceful stop long enabled and no open long position.")
+#             elif not (symbol in long_threads and long_threads[symbol][0].is_alive()):
+#                 logging.info(f"Starting long thread for symbol {symbol}.")
+#                 action_taken_long = start_thread_for_symbol(symbol, args, manager, signal, "long", has_open_long, has_open_short)
+#             else:
+#                 logging.info(f"Long thread already running for symbol {symbol}. Skipping.")
+#         else:
+#             logging.info(f"Cannot open long position for {symbol}. Long positions limit reached or position already exists.")
 
-    # Handle short signals
-    if signal_short and short_mode:
-        if (can_add_new_short_symbol or symbol in unique_active_symbols) and not has_open_short:
-            if graceful_stop_short and not is_open_position:
-                logging.info(f"Skipping short signal for {symbol} due to graceful stop short enabled and no open short position.")
-            elif not (symbol in short_threads and short_threads[symbol][0].is_alive()):
-                logging.info(f"Starting short thread for symbol {symbol}.")
-                action_taken_short = start_thread_for_symbol(symbol, args, manager, signal, "short", has_open_long, has_open_short)
-            else:
-                logging.info(f"Short thread already running for symbol {symbol}. Skipping.")
-        else:
-            logging.info(f"Cannot open short position for {symbol}. Short positions limit reached or position already exists.")
+#     # Handle short signals
+#     if signal_short and short_mode:
+#         if (can_add_new_short_symbol or symbol in unique_active_symbols) and not has_open_short:
+#             if graceful_stop_short and not is_open_position:
+#                 logging.info(f"Skipping short signal for {symbol} due to graceful stop short enabled and no open short position.")
+#             elif not (symbol in short_threads and short_threads[symbol][0].is_alive()):
+#                 logging.info(f"Starting short thread for symbol {symbol}.")
+#                 action_taken_short = start_thread_for_symbol(symbol, args, manager, signal, "short", has_open_long, has_open_short)
+#             else:
+#                 logging.info(f"Short thread already running for symbol {symbol}. Skipping.")
+#         else:
+#             logging.info(f"Cannot open short position for {symbol}. Short positions limit reached or position already exists.")
 
-    # Update active symbols based on actions taken
-    if action_taken_long or action_taken_short:
-        unique_active_symbols.add(symbol)
-        if action_taken_long:
-            active_long_symbols.add(symbol)
-        if action_taken_short:
-            active_short_symbols.add(symbol)
-        logging.info(f"Action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol}.")
-    else:
-        logging.info(f"No action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol}.")
+#     # Update active symbols based on actions taken
+#     if action_taken_long or action_taken_short:
+#         unique_active_symbols.add(symbol)
+#         if action_taken_long:
+#             active_long_symbols.add(symbol)
+#         if action_taken_short:
+#             active_short_symbols.add(symbol)
+#         logging.info(f"Action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol}.")
+#     else:
+#         logging.info(f"No action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol}.")
 
-    # Return the result indicating whether any action was taken
-    return action_taken_long or action_taken_short
+#     # Return the result indicating whether any action was taken
+#     return action_taken_long or action_taken_short
 
-def handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+def handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, symbols_allowed_long, symbols_allowed_short, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
     """
     Handle trading signals for a given symbol and manage open positions or start new trades.
 
@@ -947,7 +1163,10 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
                                                     long_mode=long_mode, 
                                                     short_mode=short_mode, 
                                                     graceful_stop_long=graceful_stop_long, 
-                                                    graceful_stop_short=graceful_stop_short)
+                                                    graceful_stop_short=graceful_stop_short,
+                                                    symbols_allowed=symbols_allowed,
+                                                    symbols_allowed_long=symbols_allowed_long,
+                                                    symbols_allowed_short=symbols_allowed_short)
         return action_taken
 
     # Handle long signals for open positions or new symbols
@@ -956,7 +1175,7 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping long signal for {symbol} due to graceful stop long enabled.")
         else:
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Starting long thread for symbol {symbol}.")
-            action_taken_long = start_thread_for_symbol(symbol, args, manager, signal, "long", has_open_long, has_open_short)
+            action_taken_long = start_thread_for_symbol(symbol, args, manager, signal, "long", has_open_long, has_open_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
             if action_taken_long:
                 active_long_symbols.add(symbol)
                 unique_active_symbols.add(symbol)
@@ -967,7 +1186,7 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Skipping short signal for {symbol} due to graceful stop short enabled.")
         else:
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Starting short thread for symbol {symbol}.")
-            action_taken_short = start_thread_for_symbol(symbol, args, manager, signal, "short", has_open_long, has_open_short)
+            action_taken_short = start_thread_for_symbol(symbol, args, manager, signal, "short", has_open_long, has_open_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
             if action_taken_short:
                 active_short_symbols.add(symbol)
                 unique_active_symbols.add(symbol)
@@ -998,27 +1217,27 @@ def update_active_symbols(open_position_symbols):
     logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Updated active short symbols ({len(active_short_symbols)}): {active_short_symbols}")
     logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Updated unique active symbols ({len(unique_active_symbols)}): {unique_active_symbols}")
 
-def manage_excess_threads(symbols_allowed):
-    global active_symbols, active_long_symbols, active_short_symbols
-    long_positions = {symbol for symbol in active_symbols if symbol in active_long_symbols}
-    short_positions = {symbol for symbol in active_symbols if symbol in active_short_symbols}
+# def manage_excess_threads(symbols_allowed, symbols_allowed_long, symbols_allowed_short):
+#     global active_symbols, active_long_symbols, active_short_symbols
+#     long_positions = {symbol for symbol in active_symbols if symbol in active_long_symbols}
+#     short_positions = {symbol for symbol in active_symbols if symbol in active_short_symbols}
 
-    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Managing excess threads. Total long positions: {len(long_positions)}, Total short positions: {len(short_positions)}")
+#     logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Managing excess threads. Total long positions: {len(long_positions)}, Total short positions: {len(short_positions)}")
 
-    excess_long_count = len(long_positions) - symbols_allowed
-    excess_short_count = len(short_positions) - symbols_allowed
+#     excess_long_count = len(long_positions) - symbols_allowed
+#     excess_short_count = len(short_positions) - symbols_allowed
 
-    while excess_long_count > 0:
-        symbol_to_remove = long_positions.pop()
-        remove_thread_for_symbol(symbol_to_remove)
-        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Removed excess long thread for symbol: {symbol_to_remove}")
-        excess_long_count -= 1
+#     while excess_long_count > 0:
+#         symbol_to_remove = long_positions.pop()
+#         remove_thread_for_symbol(symbol_to_remove)
+#         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Removed excess long thread for symbol: {symbol_to_remove}")
+#         excess_long_count -= 1
 
-    while excess_short_count > 0:
-        symbol_to_remove = short_positions.pop()
-        remove_thread_for_symbol(symbol_to_remove)
-        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Removed excess short thread for symbol: {symbol_to_remove}")
-        excess_short_count -= 1
+#     while excess_short_count > 0:
+#         symbol_to_remove = short_positions.pop()
+#         remove_thread_for_symbol(symbol_to_remove)
+#         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Removed excess short thread for symbol: {symbol_to_remove}")
+#         excess_short_count -= 1
 
 def is_long_position(symbol):
     pos_data = getattr(manager.exchange, f"get_all_open_positions_{args.exchange.lower()}")()
@@ -1057,7 +1276,7 @@ def remove_thread_for_symbol(symbol):
     unique_active_symbols.discard(symbol)
 
 
-def start_thread_for_open_symbol(symbol, args, manager, mfirsi_signal, has_open_long, has_open_short, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+def start_thread_for_open_symbol(symbol, args, manager, mfirsi_signal, has_open_long, has_open_short, long_mode, short_mode, graceful_stop_long, graceful_stop_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short):
     global unique_active_symbols, long_threads, short_threads, active_long_symbols, active_short_symbols, active_symbols
     action_taken = False
 
@@ -1078,25 +1297,25 @@ def start_thread_for_open_symbol(symbol, args, manager, mfirsi_signal, has_open_
         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Neutral signal received for {symbol}. Managing open positions.")
 
         if has_open_long and not (symbol in long_threads and long_threads[symbol][0].is_alive()):
-            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "long", has_open_long, has_open_short)
+            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "long", has_open_long, has_open_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
             action_taken = action_taken or thread_started
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] [DEBUG] {'Started' if thread_started else 'Failed to start'} long thread for symbol {symbol} based on neutral signal")
 
         if has_open_short and not (symbol in short_threads and short_threads[symbol][0].is_alive()):
-            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "short", has_open_long, has_open_short)
+            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "short", has_open_long, has_open_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
             action_taken = action_taken or thread_started
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] [DEBUG] {'Started' if thread_started else 'Failed to start'} short thread for symbol {symbol} based on neutral signal")
 
     else:
         # Start long thread if long mode is enabled, there is an open long position, and graceful stop is not active
         if long_mode and has_open_long and not graceful_stop_long and not (symbol in long_threads and long_threads[symbol][0].is_alive()):
-            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "long", has_open_long, has_open_short)
+            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "long", has_open_long, has_open_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
             action_taken = action_taken or thread_started
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] [DEBUG] {'Started' if thread_started else 'Failed to start'} long thread for open symbol {symbol}")
 
         # Start short thread if short mode is enabled, there is an open short position, and graceful stop is not active
         if short_mode and has_open_short and not graceful_stop_short and not (symbol in short_threads and short_threads[symbol][0].is_alive()):
-            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "short", has_open_long, has_open_short)
+            thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "short", has_open_long, has_open_short, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
             action_taken = action_taken or thread_started
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] [DEBUG] {'Started' if thread_started else 'Failed to start'} short thread for open symbol {symbol}")
 
@@ -1106,7 +1325,11 @@ def start_thread_for_open_symbol(symbol, args, manager, mfirsi_signal, has_open_
     
     return action_taken
 
-def start_thread_for_symbol(symbol, args, manager, mfirsi_signal, action, has_open_long, has_open_short):
+def start_thread_for_symbol(
+    symbol, args, manager, mfirsi_signal, action, 
+    has_open_long, has_open_short,
+    symbols_allowed, symbols_allowed_long, symbols_allowed_short
+):
     """
     COMMENT: This is a key function that actually spawns the 'run_bot' thread
     for a given symbol, passing the relevant parameters. It also updates the
@@ -1114,29 +1337,48 @@ def start_thread_for_symbol(symbol, args, manager, mfirsi_signal, action, has_op
     """
     global unique_active_symbols, long_threads, short_threads
     global active_long_symbols, active_short_symbols, active_symbols
-    
-    # We do concurrency checks, see if there's already a thread, etc.
-    # We do concurrency checks, see if there's already a thread, etc.
-    # Then we create thread = threading.Thread(target=run_bot, args=...).
-    # We store (thread, thread_completed_event) in either long_threads or short_threads
-    # depending on 'action'.
 
-    # Then we actually start the thread: thread.start().
-    # That calls run_bot(...) in a separate thread of execution.
-    
-    # Check if a long thread is already running for this symbol
-    if action == "long":
+    # 1) We can read or pass symbols_allowed_long / symbols_allowed_short into this function.
+    #    If you have them in a global or you pass them in from the caller, that’s up to you.
+    #    Let’s assume we pass them in from the caller for clarity:
+    #       def start_thread_for_symbol(symbol, args, manager, mfirsi_signal, action,
+    #                                   has_open_long, has_open_short,
+    #                                   symbols_allowed, symbols_allowed_long, symbols_allowed_short):
+
+    # Already in your code: do not exceed total symbol limit
+    if len(unique_active_symbols) >= symbols_allowed and symbol not in unique_active_symbols:
+        logging.info(f"[[{symbol}]] Cannot start new thread. Reached max total allowed symbols ({symbols_allowed}).")
+        return False
+
+    # 2) SIDE-BASED CAPACITY LOGIC:
+    #    We'll check if we are about to open a new long or short that is NOT already open.
+    #    If it’s already open (has_open_long or has_open_short is True), we let it pass
+    #    because we’re just “managing” an already-open position.
+
+    # Count how many are currently open in each side:
+    current_long_count = len(active_long_symbols)
+    current_short_count = len(active_short_symbols)
+
+    # If action == "long" and we *don't* already have an open long for this symbol:
+    if action == "long" and not has_open_long:
+        if current_long_count >= symbols_allowed_long:
+            logging.info(f"[[{symbol}]] Skipping new LONG thread. Already reached max long positions ({symbols_allowed_long}).")
+            return False
+        # Additionally, if there's an existing long thread running:
         if symbol in long_threads and long_threads[symbol][0].is_alive():
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Long thread already running for symbol {symbol}. Skipping.")
+            logging.info(f"[[{symbol}]] Long thread already running for this symbol. Skipping.")
             return False
 
-    # Check if a short thread is already running for this symbol
-    elif action == "short":
+    # Similarly for short:
+    if action == "short" and not has_open_short:
+        if current_short_count >= symbols_allowed_short:
+            logging.info(f"[[{symbol}]] Skipping new SHORT thread. Already reached max short positions ({symbols_allowed_short}).")
+            return False
+        # Additionally, if there's an existing short thread running:
         if symbol in short_threads and short_threads[symbol][0].is_alive():
-            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Short thread already running for symbol {symbol}. Skipping.")
+            logging.info(f"[[{symbol}]] Short thread already running for this symbol. Skipping.")
             return False
 
-    # Handle neutral signals explicitly (threads for neutral signals should manage open positions)
     elif action == "neutral":
         logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Handling neutral signal for {symbol}, managing open positions.")
         if not (symbol in long_threads and long_threads[symbol][0].is_alive()) and has_open_long:
@@ -1149,23 +1391,28 @@ def start_thread_for_symbol(symbol, args, manager, mfirsi_signal, action, has_op
             logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] No thread started for symbol {symbol} with neutral signal.")
             return False
 
-    # Initialize thread and event
     thread_completed = threading.Event()
-    thread = threading.Thread(target=run_bot, args=(symbol, args, market_maker, manager, args.account_name, symbols_allowed, latest_rotator_symbols, thread_completed, mfirsi_signal, action))
+    thread = threading.Thread(
+        target=run_bot,
+        args=(
+            symbol, args, market_maker, manager, args.account_name,
+            symbols_allowed, latest_rotator_symbols, thread_completed,
+            mfirsi_signal, action
+        )
+    )
 
-    # Add thread to the appropriate dictionary
     if action == "long":
         long_threads[symbol] = (thread, thread_completed)
         active_long_symbols.add(symbol)
+
     elif action == "short":
         short_threads[symbol] = (thread, thread_completed)
         active_short_symbols.add(symbol)
 
-    # Start thread and log the action
     active_symbols.add(symbol)
     unique_active_symbols.add(symbol)
     thread.start()
-    logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Started thread for symbol {symbol} with action {action} based on MFIRSI signal.")
+    logging.info(f"[[{symbol}]] Started thread for symbol {symbol} with action {action}.")
     return True
 
 def fetch_updated_symbols(args, manager, whitelist=None):
@@ -1213,9 +1460,9 @@ def log_symbol_details(strategy, symbols):
     logging.info(f"Potential symbols for {strategy}: {symbols}")
 
 
-def lbank_auto_rotation(args, market_maker, manager, symbols_allowed):
-    open_position_symbols = {standardize_symbol(pos['symbol']) for pos in market_maker.exchange.get_all_open_positions_binance()}
-    logging.info(f"Open position symbols: {open_position_symbols}")
+# def lbank_auto_rotation(args, market_maker, manager, symbols_allowed):
+#     open_position_symbols = {standardize_symbol(pos['symbol']) for pos in market_maker.exchange.get_all_open_positions_binance()}
+#     logging.info(f"Open position symbols: {open_position_symbols}")
 
 init(autoreset=True)
 
@@ -1308,13 +1555,17 @@ if __name__ == '__main__':
 
     for exch in config.exchanges:
         if exch.name == exchange_name and exch.account_name == args.account_name:
-            # logging.info(f"Symbols allowed changed to symbols_allowed from config")
-            symbols_allowed = exch.symbols_allowed
-            logging.info(f"Symbols allowed changed to symbols_allowed from config ({symbols_allowed})")
+            symbols_allowed = getattr(exch, 'symbols_allowed', 10)
+            symbols_allowed_long = getattr(exch, 'symbols_allowed_long', symbols_allowed)
+            symbols_allowed_short = getattr(exch, 'symbols_allowed_short', symbols_allowed)
+            
+            logging.info(f"symbols_allowed={symbols_allowed}, symbols_allowed_long={symbols_allowed_long}, symbols_allowed_short={symbols_allowed_short}")
             break
     else:
-        logging.info(f"Symbols allowed defaulted to 10")
+        logging.info(f"No matching exchange found. Defaulting symbols_allowed to 10.")
         symbols_allowed = 10
+        symbols_allowed_long = 5
+        symbols_allowed_short = 2
 
     table_manager = LiveTableManager()
     display_thread = threading.Thread(target=table_manager.display_table)
@@ -1330,9 +1581,7 @@ if __name__ == '__main__':
 
             match exchange_name.lower():
                 case 'bybit':
-                    bybit_auto_rotation(args, market_maker, manager, symbols_allowed)
-                case 'lbank':
-                    lbank_auto_rotation(args, manager, market_maker, symbols_allowed)
+                    bybit_auto_rotation(args, market_maker, manager, symbols_allowed, symbols_allowed_long, symbols_allowed_short)
                 case _:
                     logging.warning(f"Auto-rotation not implemented for exchange: {exchange_name}")
 
