@@ -3,7 +3,8 @@ import pytz
 from datetime import datetime
 from directionalscalper.core.strategies.logger import Logger
 
-logging = Logger(logger_name="BotMetrics", filename="BotMetrics.log", stream=True)
+# logger = Logger(logger_name="BotMetrics", filename="BotMetrics.log", stream=True)
+logger = Logger(logger_name="BotMetrics", filename="BotMetrics.log", stream=True)
 
 class BotDatabase:
     def __init__(self, db_file="bot_data.db", exchange=None):
@@ -101,17 +102,17 @@ class BotDatabase:
             if start_date_str:
                 start_date = datetime.strptime(start_date_str, '%Y-%m-%dT%H:%M:%S.%f')
             else:
-                logging.error("Start date string from database is None.")
+                logger.error("Start date string from database is None.")
                 return 0
         else:
-            logging.warning("Initial values not found in database. Inserting new values.")
+            logger.warning("Initial values not found in database. Inserting new values.")
             initial_equity = self.exchange.get_balance_bybit(quote_currency)
             start_date = datetime.now()
             self.save_initial_values(initial_equity, start_date)
 
         # Safety check
         if not isinstance(start_date, datetime):
-            logging.error("Start date is not a valid datetime object. Defaulting to current datetime.")
+            logger.error("Start date is not a valid datetime object. Defaulting to current datetime.")
             start_date = datetime.now()
 
         # Compute average daily gain percentage

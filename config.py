@@ -9,7 +9,10 @@ from enum import Enum
 from pydantic import BaseModel, HttpUrl, ValidationError, validator, DirectoryPath
 
 from directionalscalper.core.strategies.logger import Logger
-logging = Logger(logger_name="Configuration", filename="Configuration.log", stream=True)
+# logger = Logger(logger_name="Configuration", filename="Configuration.log", stream=True)
+logger = Logger(logger_name="Configuration", filename="Configuration.log", stream=True)
+
+
 
 VERSION = "v2.9.9"
 
@@ -284,11 +287,11 @@ def get_exchange_credentials(exchange_name, account_name):
             passphrase = exchange_data.get('passphrase')
             symbols_allowed = exchange_data.get('symbols_allowed', 12)  # Default to 12 if not specified
 
-            # Logging the symbols_allowed value
+            # logger the symbols_allowed value
             if 'symbols_allowed' in exchange_data:
-                logging.info(f"Retrieved symbols_allowed for {exchange_name}: {symbols_allowed}")
+                logger.info(f"Retrieved symbols_allowed for {exchange_name}: {symbols_allowed}")
             else:
-                logging.warning(f"symbols_allowed not found for {exchange_name}. Defaulting to 12.")
+                logger.warning(f"symbols_allowed not found for {exchange_name}. Defaulting to 12.")
             
             return api_key, secret_key, passphrase, symbols_allowed
         else:

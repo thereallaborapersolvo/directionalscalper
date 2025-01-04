@@ -13,9 +13,9 @@ import requests  # type: ignore
 from directionalscalper.core.utils import send_public_request
 from directionalscalper.core.strategies.logger import Logger
 
-logging = Logger(logger_name="Manager", filename="Manager.log", stream=True) 
+logger = Logger(logger_name="Manager", filename="Manager.log", stream=True) 
 
-#log = logging.getLogger(__name__)
+#log = logger.getLogger(__name__)
 
 from time import sleep
 
@@ -39,7 +39,7 @@ class Manager:
         self.exchange = exchange
         self.exchange_name = exchange_name
         self.data_source_exchange = data_source_exchange
-        logging.info("Starting API Manager")
+        logger.info("Starting API Manager")
         
         self.api = api
         self.cache_life_seconds = cache_life_seconds
@@ -76,22 +76,22 @@ class Manager:
         # self.api_data_cache_expiry = datetime.now() - timedelta(seconds=1)
 
         if self.api == "remote":
-            logging.info("API manager mode: remote")
+            logger.info("API manager mode: remote")
             if len(self.url) < 6:
                 # Adjusting the default URL based on the exchange_name
                 self.url = f"https://api.quantumvoid.org/volumedata/quantdatav2_{self.exchange_name.replace('_', '')}.json"
-            logging.info(f"Remote API URL: {self.url}")
+            logger.info(f"Remote API URL: {self.url}")
             self.data = self.get_remote_data()
 
         elif self.api == "local":
             # You might also want to consider adjusting the local path based on the exchange_name in the future.
             if len(str(self.path)) < 6:
                 self.path = Path("volumedata", f"quantdatav2_{self.exchange_name.replace('_', '')}.json")
-            logging.info(f"Local API directory: {self.path}")
+            logger.info(f"Local API directory: {self.path}")
             self.data = self.get_local_data()
 
         else:
-            logging.error("API must be 'local' or 'remote'")
+            logger.error("API must be 'local' or 'remote'")
             raise InvalidAPI(message="API must be 'local' or 'remote'")
 
         self.update_last_checked()
@@ -111,11 +111,11 @@ class Manager:
             delay = min(58, delay)  # cap the delay to 58 seconds
 
             try:
-                logging.info(f"Sending request to {url} (Attempt: {retry + 1})")
+                logger.info(f"Sending request to {url} (Attempt: {retry + 1})")
                 header, raw_json = send_public_request(url=url)
 
                 if isinstance(raw_json, list):
-                    logging.info(f"Received {len(raw_json)} assets from API")
+                    logger.info(f"Received {len(raw_json)} assets from API")
 
                     for asset in raw_json:
                         symbol = asset.get("Asset", "")
@@ -123,26 +123,26 @@ class Manager:
                         usd_price = asset.get("Price", float('inf'))
 
                         if blacklist and any(fnmatch.fnmatch(symbol, pattern) for pattern in blacklist):
-                            logging.debug(f"Skipping {symbol} as it's in blacklist")
+                            logger.debug(f"Skipping {symbol} as it's in blacklist")
                             continue
 
                         if whitelist:
-                            logging.debug(f"Whitelist provided: {whitelist}")
+                            logger.debug(f"Whitelist provided: {whitelist}")
                             if symbol not in whitelist:
-                                logging.debug(f"Skipping {symbol} as it's not in whitelist")
+                                logger.debug(f"Skipping {symbol} as it's not in whitelist")
                                 continue
 
                         # Check against the max_usd_value, if provided
                         if max_usd_value is not None and usd_price > max_usd_value:
-                            logging.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
+                            logger.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
                             continue
 
-                        logging.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if min_qty_threshold is None or min_qty <= min_qty_threshold:
                             symbols.append(symbol)
 
-                    logging.info(f"Returning {len(symbols)} symbols")
+                    logger.info(f"Returning {len(symbols)} symbols")
 
                     # If successfully fetched, update the cache and its expiry time
                     if symbols:
@@ -152,21 +152,21 @@ class Manager:
                     return symbols
 
                 else:
-                    logging.warning("Unexpected data format. Expected a list of assets.")
+                    logger.warning("Unexpected data format. Expected a list of assets.")
 
             except requests.exceptions.RequestException as e:
-                logging.warning(f"Request failed: {e}")
+                logger.warning(f"Request failed: {e}")
             except json.decoder.JSONDecodeError as e:
-                logging.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
+                logger.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
             except Exception as e:
-                logging.warning(f"Unexpected error occurred: {e}")
+                logger.warning(f"Unexpected error occurred: {e}")
 
             # Wait before the next retry
             if retry < max_retries - 1:
                 time.sleep(delay)
 
         # Return cached symbols if all retries fail
-        logging.warning(f"Couldn't fetch every symbols after {max_retries} attempts. Using cached symbols.")
+        logger.warning(f"Couldn't fetch every symbols after {max_retries} attempts. Using cached symbols.")
         return self.everything_cache or []
 
 
@@ -182,38 +182,38 @@ class Manager:
     #         delay = min(58, delay)  # cap the delay to 58 seconds
 
     #         try:
-    #             logging.info(f"Sending request to {url} (Attempt: {retry + 1})")
+    #             logger.info(f"Sending request to {url} (Attempt: {retry + 1})")
     #             header, raw_json = send_public_request(url=url)
 
     #             if isinstance(raw_json, list):
-    #                 logging.info(f"Received {len(raw_json)} assets from API")
+    #                 logger.info(f"Received {len(raw_json)} assets from API")
 
     #                 for asset in raw_json:
     #                     symbol = asset.get("Asset", "")
     #                     min_qty = asset.get("Min qty", 0)
     #                     usd_price = asset.get("Price", float('inf'))
 
-    #                     logging.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+    #                     logger.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
     #                     if blacklist and any(fnmatch.fnmatch(symbol, pattern) for pattern in blacklist):
-    #                         logging.info(f"Skipping {symbol} as it's in blacklist")
+    #                         logger.info(f"Skipping {symbol} as it's in blacklist")
     #                         continue
 
     #                     if whitelist:
-    #                         logging.info(f"Whitelist provided: {whitelist}")
+    #                         logger.info(f"Whitelist provided: {whitelist}")
     #                         if symbol not in whitelist:
-    #                             logging.info(f"Skipping {symbol} as it's not in whitelist")
+    #                             logger.info(f"Skipping {symbol} as it's not in whitelist")
     #                             continue
 
     #                     # Check against the max_usd_value, if provided
     #                     if max_usd_value is not None and usd_price > max_usd_value:
-    #                         logging.info(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
+    #                         logger.info(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
     #                         continue
 
     #                     if min_qty_threshold is None or min_qty <= min_qty_threshold:
     #                         symbols.append(symbol)
 
-    #                 logging.info(f"Returning {len(symbols)} symbols")
+    #                 logger.info(f"Returning {len(symbols)} symbols")
 
     #                 # If successfully fetched, update the cache and its expiry time
     #                 if symbols:
@@ -223,21 +223,21 @@ class Manager:
     #                 return symbols
 
     #             else:
-    #                 logging.warning("Unexpected data format. Expected a list of assets.")
+    #                 logger.warning("Unexpected data format. Expected a list of assets.")
 
     #         except requests.exceptions.RequestException as e:
-    #             logging.warning(f"Request failed: {e}")
+    #             logger.warning(f"Request failed: {e}")
     #         except json.decoder.JSONDecodeError as e:
-    #             logging.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
+    #             logger.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
     #         except Exception as e:
-    #             logging.warning(f"Unexpected error occurred: {e}")
+    #             logger.warning(f"Unexpected error occurred: {e}")
 
     #         # Wait before the next retry
     #         if retry < max_retries - 1:
     #             time.sleep(delay)
 
     #     # Return cached symbols if all retries fail
-    #     logging.warning(f"Couldn't fetch everything symbols after {max_retries} attempts. Using cached symbols.")
+    #     logger.warning(f"Couldn't fetch everything symbols after {max_retries} attempts. Using cached symbols.")
     #     return self.everything_cache or []
 
 
@@ -259,11 +259,11 @@ class Manager:
                 self.data_cache_expiry = current_time + timedelta(seconds=self.cache_life_seconds)
                 return raw_json
             except requests.exceptions.RequestException as e:
-                logging.error(f"Request failed: {e}")
+                logger.error(f"Request failed: {e}")
             except json.decoder.JSONDecodeError as e:
-                logging.error(f"Failed to parse JSON: {e}")
+                logger.error(f"Failed to parse JSON: {e}")
             except Exception as e:
-                logging.error(f"Unexpected error occurred: {e}")
+                logger.error(f"Unexpected error occurred: {e}")
             
             # Wait before the next retry
             if retry < max_retries - 1:
@@ -305,31 +305,31 @@ class Manager:
             delay = min(58, delay)  # cap the delay to 30 seconds
 
             try:
-                logging.info(f"Sending request to {url} (Attempt: {retry + 1})")
+                logger.info(f"Sending request to {url} (Attempt: {retry + 1})")
                 header, raw_json = send_public_request(url=url)
                 
                 if isinstance(raw_json, list):
-                    logging.info(f"Received {len(raw_json)} symbols from API")
+                    logger.info(f"Received {len(raw_json)} symbols from API")
                     
                     symbols = [asset.get("Asset", "") for asset in raw_json if "Asset" in asset]
-                    logging.info(f"Returning {len(symbols)} symbols")
+                    logger.info(f"Returning {len(symbols)} symbols")
                     return symbols
                 else:
-                    logging.warning("Unexpected data format. Expected a list of symbols.")
+                    logger.warning("Unexpected data format. Expected a list of symbols.")
                     
             except requests.exceptions.RequestException as e:
-                logging.warning(f"Request failed: {e}")
+                logger.warning(f"Request failed: {e}")
             except json.decoder.JSONDecodeError as e:
-                logging.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
+                logger.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
             except Exception as e:
-                logging.warning(f"Unexpected error occurred: {e}")
+                logger.warning(f"Unexpected error occurred: {e}")
 
             # Wait before the next retry
             if retry < max_retries - 1:
                 sleep(delay)
         
         # If all retries fail, return an empty list
-        logging.warning(f"Couldn't fetch symbols after {max_retries} attempts.")
+        logger.warning(f"Couldn't fetch symbols after {max_retries} attempts.")
         return []
 
     def get_atrp_sorted_rotator_symbols(self, min_qty_threshold: float = None, blacklist: list = None, whitelist: list = None, max_usd_value: float = None, max_retries: int = 5):
@@ -340,11 +340,11 @@ class Manager:
             delay = min(58, delay)  # cap the delay to 30 seconds
 
             try:
-                logging.info(f"Sending request to {url} (Attempt: {retry + 1})")
+                logger.info(f"Sending request to {url} (Attempt: {retry + 1})")
                 header, raw_json = send_public_request(url=url)
                 
                 if isinstance(raw_json, list):
-                    logging.info(f"Received {len(raw_json)} ATRP sorted rotator symbols from API")
+                    logger.info(f"Received {len(raw_json)} ATRP sorted rotator symbols from API")
                     
                     filtered_symbols = []
                     for asset in raw_json:
@@ -352,44 +352,44 @@ class Manager:
                         min_qty = asset.get("Min qty", 0)
                         usd_price = asset.get("Price", float('inf'))
 
-                        logging.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if blacklist and any(fnmatch.fnmatch(symbol, pattern) for pattern in blacklist):
-                            logging.debug(f"Skipping {symbol} as it's in blacklist")
+                            logger.debug(f"Skipping {symbol} as it's in blacklist")
                             continue
 
                         if whitelist and symbol not in whitelist:
-                            logging.debug(f"Skipping {symbol} as it's not in whitelist")
+                            logger.debug(f"Skipping {symbol} as it's not in whitelist")
                             continue
 
                         # Check against the max_usd_value, if provided
                         if max_usd_value is not None and usd_price > max_usd_value:
-                            logging.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
+                            logger.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
                             continue
 
-                        logging.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if min_qty_threshold is None or min_qty <= min_qty_threshold:
                             filtered_symbols.append(asset)
 
-                    logging.info(f"Returning {len(filtered_symbols)} ATRP sorted rotator symbols")
+                    logger.info(f"Returning {len(filtered_symbols)} ATRP sorted rotator symbols")
                     return filtered_symbols
                 else:
-                    logging.warning("Unexpected data format. Expected a list of ATRP sorted rotator symbols.")
+                    logger.warning("Unexpected data format. Expected a list of ATRP sorted rotator symbols.")
                     
             except requests.exceptions.RequestException as e:
-                logging.warning(f"Request failed: {e}")
+                logger.warning(f"Request failed: {e}")
             except json.decoder.JSONDecodeError as e:
-                logging.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
+                logger.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
             except Exception as e:
-                logging.warning(f"Unexpected error occurred: {e}")
+                logger.warning(f"Unexpected error occurred: {e}")
 
             # Wait before the next retry
             if retry < max_retries - 1:
                 sleep(delay)
         
         # If all retries fail, return an empty list
-        logging.warning(f"Couldn't fetch ATRP sorted rotator symbols after {max_retries} attempts.")
+        logger.warning(f"Couldn't fetch ATRP sorted rotator symbols after {max_retries} attempts.")
         return []
 
     def get_bullish_rotator_symbols(self, min_qty_threshold: float = None, blacklist: list = None, whitelist: list = None, max_usd_value: float = None, max_retries: int = 5):
@@ -406,55 +406,55 @@ class Manager:
             delay = min(58, delay)  # cap the delay to 30 seconds
 
             try:
-                logging.info(f"Sending request to {url} (Attempt: {retry + 1})")
+                logger.info(f"Sending request to {url} (Attempt: {retry + 1})")
                 header, raw_json = send_public_request(url=url)
 
                 if isinstance(raw_json, list):
-                    logging.info(f"Received {len(raw_json)} assets from API")
+                    logger.info(f"Received {len(raw_json)} assets from API")
                     symbols = []
                     for asset in raw_json:
                         symbol = asset.get("Asset", "")
                         min_qty = asset.get("Min qty", 0)
                         usd_price = asset.get("Price", float('inf'))
 
-                        logging.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if blacklist and any(fnmatch.fnmatch(symbol, pattern) for pattern in blacklist):
-                            logging.debug(f"Skipping {symbol} as it's in blacklist")
+                            logger.debug(f"Skipping {symbol} as it's in blacklist")
                             continue
 
                         if whitelist and symbol not in whitelist:
-                            logging.debug(f"Skipping {symbol} as it's not in whitelist")
+                            logger.debug(f"Skipping {symbol} as it's not in whitelist")
                             continue
 
                         # Check against the max_usd_value, if provided
                         if max_usd_value is not None and usd_price > max_usd_value:
-                            logging.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
+                            logger.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
                             continue
 
-                        logging.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if min_qty_threshold is None or min_qty <= min_qty_threshold:
                             symbols.append(symbol)
 
-                    logging.info(f"Returning {len(symbols)} symbols")
+                    logger.info(f"Returning {len(symbols)} symbols")
                     return symbols
                 else:
-                    logging.warning("Unexpected data format. Expected a list of assets.")
+                    logger.warning("Unexpected data format. Expected a list of assets.")
 
             except requests.exceptions.RequestException as e:
-                logging.warning(f"Request failed: {e}")
+                logger.warning(f"Request failed: {e}")
             except json.decoder.JSONDecodeError as e:
-                logging.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
+                logger.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
             except Exception as e:
-                logging.warning(f"Unexpected error occurred: {e}")
+                logger.warning(f"Unexpected error occurred: {e}")
 
             # Wait before the next retry
             if retry < max_retries - 1:
                 sleep(delay)
 
         # If all retries fail, return an empty list
-        logging.warning(f"Couldn't fetch rotator symbols after {max_retries} attempts.")
+        logger.warning(f"Couldn't fetch rotator symbols after {max_retries} attempts.")
         return []
 
     def get_auto_rotate_symbols(self, min_qty_threshold: float = None, blacklist: list = None, whitelist: list = None, max_usd_value: float = None, max_retries: int = 5):
@@ -469,38 +469,38 @@ class Manager:
             delay = min(58, delay)  # cap the delay to 30 seconds
 
             try:
-                logging.info(f"Sending request to {url} (Attempt: {retry + 1})")
+                logger.info(f"Sending request to {url} (Attempt: {retry + 1})")
                 header, raw_json = send_public_request(url=url)
                 
                 if isinstance(raw_json, list):
-                    logging.info(f"Received {len(raw_json)} assets from API")
+                    logger.info(f"Received {len(raw_json)} assets from API")
                     
                     for asset in raw_json:
                         symbol = asset.get("Asset", "")
                         min_qty = asset.get("Min qty", 0)
                         usd_price = asset.get("Price", float('inf')) 
                         
-                        logging.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.info(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if blacklist and any(fnmatch.fnmatch(symbol, pattern) for pattern in blacklist):
-                            logging.debug(f"Skipping {symbol} as it's in blacklist")
+                            logger.debug(f"Skipping {symbol} as it's in blacklist")
                             continue
 
                         if whitelist and symbol not in whitelist:
-                            logging.debug(f"Skipping {symbol} as it's not in whitelist")
+                            logger.debug(f"Skipping {symbol} as it's not in whitelist")
                             continue
 
                         # Check against the max_usd_value, if provided
                         if max_usd_value is not None and usd_price > max_usd_value:
-                            logging.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
+                            logger.debug(f"Skipping {symbol} as its USD price {usd_price} is greater than the max allowed {max_usd_value}")
                             continue
 
-                        logging.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
+                        logger.debug(f"Processing symbol {symbol} with min_qty {min_qty} and USD price {usd_price}")
 
                         if min_qty_threshold is None or min_qty <= min_qty_threshold:
                             symbols.append(symbol)
 
-                    logging.info(f"Returning {len(symbols)} symbols")
+                    logger.info(f"Returning {len(symbols)} symbols")
                     
                     # If successfully fetched, update the cache and its expiry time
                     if symbols:
@@ -510,21 +510,21 @@ class Manager:
                     return symbols
 
                 else:
-                    logging.warning("Unexpected data format. Expected a list of assets.")
+                    logger.warning("Unexpected data format. Expected a list of assets.")
                     
             except requests.exceptions.RequestException as e:
-                logging.warning(f"Request failed: {e}")
+                logger.warning(f"Request failed: {e}")
             except json.decoder.JSONDecodeError as e:
-                logging.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
+                logger.warning(f"Failed to parse JSON: {e}. Response: {raw_json}")
             except Exception as e:
-                logging.warning(f"Unexpected error occurred: {e}")
+                logger.warning(f"Unexpected error occurred: {e}")
 
             # Wait before the next retry
             if retry < max_retries - 1:
                 time.sleep(delay)
         
         # Return cached symbols if all retries fail
-        logging.warning(f"Couldn't fetch rotator symbols after {max_retries} attempts. Using cached symbols.")
+        logger.warning(f"Couldn't fetch rotator symbols after {max_retries} attempts. Using cached symbols.")
         return self.rotator_symbols_cache or []
 
     def get_symbols(self):
@@ -534,16 +534,16 @@ class Manager:
             if isinstance(raw_json, list):
                 return raw_json
             else:
-                logging.info("Unexpected data format. Expected a list of symbols.")
+                logger.info("Unexpected data format. Expected a list of symbols.")
                 return []
         except requests.exceptions.RequestException as e:
-            logging.info(f"Request failed: {e}")
+            logger.info(f"Request failed: {e}")
             return []
         except json.decoder.JSONDecodeError as e:
-            logging.info(f"Failed to parse JSON: {e}")
+            logger.info(f"Failed to parse JSON: {e}")
             return []
         except Exception as e:
-            logging.info(f"Unexpected error occurred: {e}")
+            logger.info(f"Unexpected error occurred: {e}")
             return []
 
     def get_remote_data(self):
@@ -555,11 +555,11 @@ class Manager:
                     self.data = raw_json
                     break  # if the request was successful, break the loop
                 except requests.exceptions.RequestException as e:
-                    logging.info(f"Request failed: {e}, retrying...")
+                    logger.info(f"Request failed: {e}, retrying...")
                 except json.decoder.JSONDecodeError as e:
-                    logging.info(f"Failed to parse JSON: {e}, retrying...")
+                    logger.info(f"Failed to parse JSON: {e}, retrying...")
                 except Exception as e:
-                    logging.info(f"Unexpected error occurred: {e}, retrying...")
+                    logger.info(f"Unexpected error occurred: {e}, retrying...")
                 finally:
                     self.update_last_checked()
             return self.data
@@ -573,7 +573,7 @@ class Manager:
                 if asset["Asset"] == symbol:
                     return asset
         except Exception as e:
-            logging.info(f"{e}")
+            logger.info(f"{e}")
         return None
 
     def get_1m_moving_averages(self, symbol, num_bars=20):
@@ -634,7 +634,7 @@ class Manager:
                     if value == "EMA Trend" in asset_data:
                         return asset_data["EMA Trend"]
         except Exception as e:
-            logging.info(f"{e}")
+            logger.info(f"{e}")
         return None
 
     def is_api_data_cache_expired(self):
@@ -649,7 +649,7 @@ class Manager:
         funding_data_url = f"https://api.quantumvoid.org/volumedata/funding_{self.data_source_exchange.replace('_', '')}.json"
         funding_data = self.fetch_data_from_url(funding_data_url)
 
-        #logging.info(f"Funding data: {funding_data}")
+        #logger.info(f"Funding data: {funding_data}")
 
         api_data = {
             '1mVol': self.get_asset_value(symbol, data, "1mVol"),
@@ -710,7 +710,7 @@ class Manager:
                 "MA Trend": ma_trend
             }
         except Exception as e:
-            logging.warning(f"Error processing API data for symbol {symbol}: {e}")
+            logger.warning(f"Error processing API data for symbol {symbol}: {e}")
             return {
                 "1mVol": 0,
                 "5mVol": 0,

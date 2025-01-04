@@ -16,7 +16,9 @@ from directionalscalper.core.exchanges.bybit import BybitExchange
 from directionalscalper.core.strategies.logger import Logger
 from live_table_manager import shared_symbols_data
 from rate_limit import RateLimit
-logging = Logger(logger_name="LinearGridBase", filename="LinearGridBase.log", stream=True)
+# logger = Logger(logger_name="LinearGridBase", filename="LinearGridBase.log", stream=True)
+logger = Logger(logger_name="LinearGridBase", filename="LinearGridBase.log", stream=True)
+
 
 symbol_locks = {}
 
@@ -47,26 +49,26 @@ class LinearGridBaseFutures(BybitStrategy):
         # self.action = None  # Initialize action as None or a default value
         ConfigInitializer.initialize_config_attributes(self, config)
         self._initialize_symbol_locks(rotator_symbols_standardized)
-
+    
     def _initialize_symbol_locks(self, symbols):
         for symbol in symbols or []:
             standardized_symbol = symbol.upper()
             if standardized_symbol not in symbol_locks:
                 symbol_locks[standardized_symbol] = {'long': threading.Lock(), 'short': threading.Lock()}
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Initialized locks for symbol {standardized_symbol}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Initialized locks for symbol {standardized_symbol}")
 
     def run(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None, action=None):
         try:
             self.symbol = symbol.upper()
             self.thread_id = threading.get_ident()
             self.action = action  # Set the action here
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting execution for {self.symbol} with action {action}")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting execution for {self.symbol} with action {action}")
 
             if self.symbol not in symbol_locks:
                 symbol_locks[self.symbol] = {'long': threading.Lock(), 'short': threading.Lock()}
 
             if symbol_locks[self.symbol][action].acquire(blocking=False):
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Lock acquired for action {action}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Lock acquired for action {action}")
                 try:
                     if action == "long":
                         self.run_long_trades(self.symbol, rotator_symbols_standardized, mfirsi_signal)
@@ -74,20 +76,20 @@ class LinearGridBaseFutures(BybitStrategy):
                         self.run_short_trades(self.symbol, rotator_symbols_standardized, mfirsi_signal)
                 finally:
                     symbol_locks[self.symbol][action].release()
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Lock released for action {action}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Lock released for action {action}")
             else:
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Failed to acquire lock for action {action}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Failed to acquire lock for action {action}")
         except Exception as e:
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception in run function: {e}")
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Traceback: {traceback.format_exc()}")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception in run function: {e}")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Traceback: {traceback.format_exc()}")
 
     def run_long_trades(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None):
-        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting long trades")
+        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting long trades")
         self.running_long = True
         self.run_single_symbol(symbol, rotator_symbols_standardized, mfirsi_signal, "long")
 
     def run_short_trades(self, symbol, rotator_symbols_standardized=None, mfirsi_signal=None):
-        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting short trades")
+        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting short trades")
         self.running_short = True
         self.run_single_symbol(symbol, rotator_symbols_standardized, mfirsi_signal, "short")
 
@@ -95,8 +97,8 @@ class LinearGridBaseFutures(BybitStrategy):
         try:
             self.symbol = symbol.upper()
             self.thread_id = threading.get_ident()
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting to process symbol: [[{symbol}]]")
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Initializing default values for symbol: [[{symbol}]]")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Starting to process symbol: [[{symbol}]]")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Initializing default values for symbol: [[{symbol}]]")
 
             previous_long_pos_qty = 0
             previous_short_pos_qty = 0
@@ -128,22 +130,22 @@ class LinearGridBaseFutures(BybitStrategy):
 
             # # Clean out orders
             # self.exchange.cancel_all_orders_for_symbol_bybit(symbol)
-            # logging.info(f"Canceled all orders for {symbol}")
+            # logger.info(f"Canceled all orders for {symbol}")
 
             # Check leverages only at startup
             self.current_leverage = self.exchange.get_current_max_leverage_bybit(symbol)
             self.max_leverage = self.exchange.get_current_max_leverage_bybit(symbol)
 
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current leverage: {self.current_leverage}")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current leverage: {self.current_leverage}")
 
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Max leverage for {symbol}: {self.max_leverage}")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Max leverage for {symbol}: {self.max_leverage}")
 
             # self.adjust_risk_parameters(exchange_max_leverage=self.max_leverage)
 
             self.exchange.set_leverage_bybit(self.max_leverage, symbol)
             self.exchange.set_symbol_to_cross_margin(symbol, self.max_leverage)
 
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Running for symbol (inside run_single_symbol method): {symbol}")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Running for symbol (inside run_single_symbol method): {symbol}")
 
             # Definitions
             quote_currency = "USDT"
@@ -233,7 +235,7 @@ class LinearGridBaseFutures(BybitStrategy):
             # Hedge price diff
             price_difference_threshold = self.config.hedge_price_difference_threshold
                     
-            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Setting up exchange")
+            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Setting up exchange")
             self.exchange.setup_exchange_bybit(symbol)
 
             previous_one_minute_distance = None
@@ -242,27 +244,34 @@ class LinearGridBaseFutures(BybitStrategy):
             since_timestamp = int((datetime.now() - timedelta(days=1)).timestamp() * 1000)  # 24 hours ago in milliseconds
             # recent_trades = self.fetch_recent_trades_for_symbol(symbol, since=since_timestamp, limit=20)
 
-            # #logging.info(f"Recent trades for {symbol} : {recent_trades}")
+            # #logger.info(f"Recent trades for {symbol} : {recent_trades}")
 
             # # Check if there are any trades in the last 24 hours
             # recent_activity = any(trade['timestamp'] >= since_timestamp for trade in recent_trades)
             # if recent_activity:
-            #     logging.info(f"Recent trading activity detected for {symbol}")
+            #     logger.info(f"Recent trading activity detected for {symbol}")
             # else:
-            #     logging.info(f"No recent trading activity for {symbol} in the last 24 hours")
+            #     logger.info(f"No recent trading activity for {symbol} in the last 24 hours")
 
-
+            # # Initialize the loop counter
+            # loop_counter = 0
+            
             while self.running_long or self.running_short:
+                # Increment the loop counter at the start of each iteration
+                self.loop_counter += 1
+                loop_counter = self.loop_counter  # Optional: local variable for easier access
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Trading {symbol} in while loop in obstrategy with long: {self.running_long}")
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Trading {symbol} in while loop in obstrategy with short: {self.running_short}")
+                # Add a log statement indicating the start of a new loop iteration
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) Starting loop iteration.")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Trading {symbol} in while loop in obstrategy with long: {self.running_long}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Trading {symbol} in while loop in obstrategy with short: {self.running_short}")
 
                 # Example condition to stop the loop
                 if action == "long" and not self.running_long:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Killing thread for {symbol} because not running long")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Killing thread for {symbol} because not running long")
                     break
                 if action == "short" and not self.running_short:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Killing thread for {symbol} because not running short")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Killing thread for {symbol} because not running short")
                     break
 
                 current_time = time.time()
@@ -272,22 +281,22 @@ class LinearGridBaseFutures(BybitStrategy):
                 leverage_tiers = self.exchange.fetch_leverage_tiers(symbol)
 
                 # if leverage_tiers:
-                #     logging.info(f"Leverage tiers for {symbol}: {leverage_tiers}")
+                #     logger.info(f"Leverage tiers for {symbol}: {leverage_tiers}")
                 # else:
-                #     logging.error(f"Failed to fetch leverage tiers for {symbol}.")
+                #     logger.error(f"Failed to fetch leverage tiers for {symbol}.")
 
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Max USD value: {self.max_usd_value}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Max USD value: {self.max_usd_value}")
             
                 # Log which thread is running this part of the code
                 thread_id = threading.get_ident()
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [Thread ID: {thread_id}] In while true loop {symbol}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [Thread ID: {thread_id}] In while true loop {symbol}")
 
                 # Fetch open symbols every loop
                 open_position_data = self.retry_api_call(self.exchange.get_all_open_positions_bybit)
 
                 
-                #logging.info(f"Open position data for {symbol}: {open_position_data}")
+                #logger.info(f"Open position data for {symbol}: {open_position_data}")
 
                 position_details = {}
 
@@ -319,34 +328,34 @@ class LinearGridBaseFutures(BybitStrategy):
                             position_details[position_symbol]['short']['avg_price'] = avg_price
                             position_details[position_symbol]['short']['liq_price'] = liq_price
                     else:
-                        logging.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Missing required keys in position info for {position_symbol}")
+                        logger.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Missing required keys in position info for {position_symbol}")
 
                 open_symbols = self.extract_symbols_from_positions_bybit(open_position_data)
                 open_symbols = [symbol.replace("/", "") for symbol in open_symbols]
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open symbols: {open_symbols}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open symbols: {open_symbols}")
                 open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
-                #logging.info(f"Open symbols: {open_symbols}")
+                #logger.info(f"Open symbols: {open_symbols}")
 
-                #logging.info(f"Open orders: {open_orders}")
+                #logger.info(f"Open orders: {open_orders}")
 
                 market_data = self.get_market_data_with_retry(symbol, max_retries=100, retry_delay=5)
                 min_qty = float(market_data["min_qty"])
 
                 # position_last_update_time = self.get_position_update_time(symbol)
 
-                # logging.info(f"{symbol} last update time: {position_last_update_time}")
+                # logger.info(f"{symbol} last update time: {position_last_update_time}")
 
                 # Fetch equity data
                 fetched_total_equity = self.retry_api_call(self.exchange.get_futures_balance_bybit, quote_currency)
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Fetched total equity: {fetched_total_equity}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Fetched total equity: {fetched_total_equity}")
 
                 # Attempt to convert fetched_total_equity to a float
                 try:
                     fetched_total_equity = float(fetched_total_equity)
                 except (ValueError, TypeError):
-                    logging.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Fetched total equity could not be converted to float: {fetched_total_equity}. Resorting to last known equity.")
+                    logger.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Fetched total equity could not be converted to float: {fetched_total_equity}. Resorting to last known equity.")
                     fetched_total_equity = None
 
                 # Refresh equity if interval passed or fetched equity is 0.0
@@ -355,31 +364,31 @@ class LinearGridBaseFutures(BybitStrategy):
                         total_equity = fetched_total_equity
                         self.last_known_equity = total_equity  # Update the last known equity
                     else:
-                        logging.warning("[Thread-{self.thread_id}] [[{self.symbol}]] Failed to fetch valid total_equity or received 0.0. Using last known value.")
+                        logger.warning("[Thread-{self.thread_id}] [[{self.symbol}]] Failed to fetch valid total_equity or received 0.0. Using last known value.")
                         total_equity = self.last_known_equity  # Use last known equity
 
                     available_equity = self.retry_api_call(self.exchange.get_available_balance_bybit, quote_currency)
                     last_equity_fetch_time = current_time
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Total equity: {total_equity}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Available equity: {available_equity}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Total equity: {total_equity}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Available equity: {available_equity}")
                     
                     # Log the type of total_equity
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Type of total_equity: {type(total_equity)}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Type of total_equity: {type(total_equity)}")
 
                     # If total_equity is still None (which it shouldn't be), log an error and skip the iteration
                     if total_equity is None:
-                        logging.error("[Thread-{self.thread_id}] [[{self.symbol}]] This should not happen as total_equity should never be None. Skipping this iteration.")
+                        logger.error("[Thread-{self.thread_id}] [[{self.symbol}]] This should not happen as total_equity should never be None. Skipping this iteration.")
                         time.sleep(10)  # wait for a short period before retrying
                         continue
                     
                 blacklist = self.config.blacklist
                 if symbol in blacklist:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbol {symbol} is in the blacklist. Stopping operations for this symbol.")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbol {symbol} is in the blacklist. Stopping operations for this symbol.")
                     break
 
                 funding_check = self.is_funding_rate_acceptable(symbol)
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Funding check on {symbol} : {funding_check}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Funding check on {symbol} : {funding_check}")
 
                 current_price = self.exchange.get_current_price(symbol)
 
@@ -394,7 +403,7 @@ class LinearGridBaseFutures(BybitStrategy):
                 else:
                     best_ask_price = self.last_known_ask.get(symbol)  # Use last known ask price
                     if best_ask_price is None:
-                        logging.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best ask price is not available for {symbol}. Defaulting to last known ask price, which is also None.")
+                        logger.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best ask price is not available for {symbol}. Defaulting to last known ask price, which is also None.")
                         best_ask_price = 0.0  # Default to 0.0 if None
 
                 # Convert best_ask_price to float to ensure no type mismatches
@@ -407,21 +416,21 @@ class LinearGridBaseFutures(BybitStrategy):
                 else:
                     best_bid_price = self.last_known_bid.get(symbol)  # Use last known bid price
                     if best_bid_price is None:
-                        logging.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best bid price is not available for {symbol}. Defaulting to last known bid price, which is also None.")
+                        logger.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best bid price is not available for {symbol}. Defaulting to last known bid price, which is also None.")
                         best_bid_price = 0.0  # Default to 0.0 if None
 
                 # Convert best_bid_price to float to ensure no type mismatches
                 best_bid_price = float(best_bid_price)
                 best_ask_price = float(best_ask_price)
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best bid price: {best_bid_price}")
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best ask price: {best_ask_price}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best bid price: {best_bid_price}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best ask price: {best_ask_price}")
 
                 # Fetch moving averages with fallback mechanism
                 try:
                     moving_averages = self.get_all_moving_averages(symbol)
                 except ValueError as e:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Failed to get new moving averages for {symbol}, using last known values: {e}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Failed to get new moving averages for {symbol}, using last known values: {e}")
                     moving_averages = self.last_known_mas.get(symbol, {})  # Continue using last known values if an error occurs
 
 
@@ -439,40 +448,40 @@ class LinearGridBaseFutures(BybitStrategy):
 
                 # Log warnings if any of the moving averages are missing
                 if None in [ma_3_high, ma_3_low, ma_6_high, ma_6_low]:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Missing moving averages for {symbol}. Using fallback values.")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Missing moving averages for {symbol}. Using fallback values.")
 
 
                 # moving_averages = self.get_all_moving_averages(symbol)
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open symbols: {open_symbols}")
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current rotator symbols ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open symbols: {open_symbols}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current rotator symbols ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
                 symbols_to_manage = [s for s in open_symbols if s not in rotator_symbols_standardized]
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbols to manage {symbols_to_manage}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbols to manage {symbols_to_manage}")
                 
-                #logging.info(f"Open orders for {symbol}: {open_orders}")
+                #logger.info(f"Open orders for {symbol}: {open_orders}")
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbols allowed: {self.symbols_allowed}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbols allowed: {self.symbols_allowed}")
 
                 trading_allowed = self.can_trade_new_symbol(open_symbols, self.symbols_allowed, symbol)
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Checking trading for symbol {symbol}. Can trade: {trading_allowed}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbol: {symbol}, In open_symbols: {symbol in open_symbols}, Trading allowed: {trading_allowed}")
 
                 # self.adjust_risk_parameters()
 
                 # self.initialize_symbol(symbol, total_equity, best_ask_price, self.max_leverage)
 
                 # Log the currently initialized symbols
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Initialized symbols: {list(self.initialized_symbols)}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Initialized symbols: {list(self.initialized_symbols)}")
 
                 # self.check_for_inactivity(long_pos_qty, short_pos_qty)
 
                 # self.print_trade_quantities_once_bybit(symbol, total_equity, best_ask_price)
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Rotator symbols standardized: ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Rotator symbols standardized: ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
 
                 symbol_precision = self.exchange.get_symbol_precision_bybit(symbol)
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbol precision for {symbol} : {symbol_precision}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Symbol precision for {symbol} : {symbol_precision}")
 
 
                 long_pos_qty = position_details.get(symbol, {}).get('long', {}).get('qty', 0)
@@ -480,41 +489,41 @@ class LinearGridBaseFutures(BybitStrategy):
 
 
                 # Position side for symbol recently closed
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Previous long pos qty for {symbol} : {previous_long_pos_qty}")
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Previous short pos qty for {symbol} : {previous_short_pos_qty}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Previous long pos qty for {symbol} : {previous_long_pos_qty}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Previous short pos qty for {symbol} : {previous_short_pos_qty}")
 
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current long pos qty for {symbol} {long_pos_qty}")
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current short pos qty for {symbol} {short_pos_qty}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current long pos qty for {symbol} {long_pos_qty}")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current short pos qty for {symbol} {short_pos_qty}")
             
                 if previous_long_pos_qty > 0 and long_pos_qty == 0:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long position closed for {symbol}. Canceling long grid orders.")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long position closed for {symbol}. Canceling long grid orders.")
                     self.cancel_grid_orders(symbol, "buy")
                     self.active_long_grids.discard(symbol)
                     if short_pos_qty == 0:
-                        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No open positions for {symbol}. Removing from shared symbols data.")
+                        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No open positions for {symbol}. Removing from shared symbols data.")
                         shared_symbols_data.pop(symbol, None)
                     break  # Exit the while loop, thus ending the thread
 
                 elif previous_short_pos_qty > 0 and short_pos_qty == 0:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short position closed for {symbol}. Canceling short grid orders.")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short position closed for {symbol}. Canceling short grid orders.")
                     self.cancel_grid_orders(symbol, "sell")
                     self.active_short_grids.discard(symbol)
                     if long_pos_qty == 0:
-                        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No open positions for {symbol}. Removing from shared symbols data.")
+                        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No open positions for {symbol}. Removing from shared symbols data.")
                         shared_symbols_data.pop(symbol, None)
                     break  # Exit the while loop, thus ending the thread
 
 
                 try:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Checking position inactivity")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Checking position inactivity")
                     # Check for position inactivity
                     inactive_pos_time_threshold = 60 
                     if self.check_position_inactivity(symbol, inactive_pos_time_threshold, long_pos_qty, short_pos_qty, previous_long_pos_qty, previous_short_pos_qty):
-                        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No open positions for {symbol} in the last {inactive_pos_time_threshold} seconds. Terminating the thread.")
+                        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) No open positions for {symbol} in the last {inactive_pos_time_threshold} seconds. Terminating the thread.")
                         shared_symbols_data.pop(symbol, None)
                         break
                 except Exception as e:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception caught in check_position_inactivity {e}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception caught in check_position_inactivity {e}")
        
                 # Optionally, break out of the loop if all trading sides are closed
                 if not self.running_long and not self.running_short:
@@ -524,18 +533,18 @@ class LinearGridBaseFutures(BybitStrategy):
                     self.active_long_grids.discard(symbol)
                     self.active_short_grids.discard(symbol)
                     self.cleanup_before_termination(symbol)
-                    logging.info("[Thread-{self.thread_id}] [[{self.symbol}]] Both long and short operations have terminated. Exiting the loop.")
+                    logger.info("[Thread-{self.thread_id}] [[{self.symbol}]] Both long and short operations have terminated. Exiting the loop.")
                     break
                 
                 # Determine if positions have just been closed
                 if previous_long_pos_qty > 0 and long_pos_qty == 0:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) All long positions for {symbol} were recently closed. Checking for inactivity.")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) All long positions for {symbol} were recently closed. Checking for inactivity.")
                     inactive_long = True
                 else:
                     inactive_long = False
 
                 if previous_short_pos_qty > 0 and short_pos_qty == 0:
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) All short positions for {symbol} were recently closed. Checking for inactivity.")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) All short positions for {symbol} were recently closed. Checking for inactivity.")
                     inactive_short = True
                 else:
                     inactive_short = False
@@ -545,7 +554,7 @@ class LinearGridBaseFutures(BybitStrategy):
                 previous_short_pos_qty = short_pos_qty
 
                 if not self.running_long and not self.running_short:
-                    logging.info("[Thread-{self.thread_id}] [[{self.symbol}]] Both long and short operations have ended. Preparing to exit loop.")
+                    logger.info("[Thread-{self.thread_id}] [[{self.symbol}]] Both long and short operations have ended. Preparing to exit loop.")
                     shared_symbols_data.pop(symbol, None)  # Remove the symbol from shared_symbols_data
 
                 time.sleep(2)
@@ -577,9 +586,9 @@ class LinearGridBaseFutures(BybitStrategy):
                     hma_trend = metrics['HMA Trend']
                     eri_trend = metrics['ERI Trend']
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) ERI Trend: {eri_trend}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) ERI Trend: {eri_trend}")
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) MFIRSI Signal: {mfirsi_signal}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) MFIRSI Signal: {mfirsi_signal}")
 
                     fivemin_top_signal = metrics['Top Signal 5m']
                     fivemin_bottom_signal = metrics['Bottom Signal 5m']
@@ -592,16 +601,16 @@ class LinearGridBaseFutures(BybitStrategy):
                     long_liquidation_price = position_details.get(symbol, {}).get('long', {}).get('liq_price')
                     short_liquidation_price = position_details.get(symbol, {}).get('short', {}).get('liq_price')
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long liquidation price for {symbol}: {long_liquidation_price}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short liquidation price for {symbol}: {short_liquidation_price}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long liquidation price for {symbol}: {long_liquidation_price}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short liquidation price for {symbol}: {short_liquidation_price}")
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Rotator symbol trading: {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Rotator symbol trading: {symbol}")
                                 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Rotator symbols ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open symbols: {open_symbols}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Rotator symbols ({len(rotator_symbols_standardized)}): {list(rotator_symbols_standardized)[:5]}...")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open symbols: {open_symbols}")
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long pos qty {long_pos_qty} for {symbol}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short pos qty {short_pos_qty} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long pos qty {long_pos_qty} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short pos qty {short_pos_qty} for {symbol}")
 
                     # short_liq_price = position_data["short"]["liq_price"]
                     # long_liq_price = position_data["long"]["liq_price"]
@@ -620,8 +629,8 @@ class LinearGridBaseFutures(BybitStrategy):
                         wallet_exposure_limit_short=wallet_exposure_limit_short
                     )
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long dynamic amount: {long_dynamic_amount} for {symbol}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short dynamic amount: {short_dynamic_amount} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long dynamic amount: {long_dynamic_amount} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short dynamic amount: {short_dynamic_amount} for {symbol}")
 
                     long_dynamic_amount_helper, short_dynamic_amount_helper = self.calculate_dynamic_amounts_notional_nowelimit(
                         symbol=symbol,
@@ -630,8 +639,8 @@ class LinearGridBaseFutures(BybitStrategy):
                         best_ask_price=best_ask_price
                     )
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long dynamic amount helper: {long_dynamic_amount} for {symbol}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short dynamic amount helper: {short_dynamic_amount} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long dynamic amount helper: {long_dynamic_amount} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short dynamic amount helper: {short_dynamic_amount} for {symbol}")
 
                     cum_realised_pnl_long = position_data["long"]["cum_realised"]
                     cum_realised_pnl_short = position_data["short"]["cum_realised"]
@@ -669,7 +678,7 @@ class LinearGridBaseFutures(BybitStrategy):
                                              short_failsafe_upnl_pct,
                                              failsafe_start_pct)
                     except Exception as e:
-                        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Failsafe failed: {e}")
+                        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Failsafe failed: {e}")
 
                     try:
                         self.auto_reduce_logic_grid_hardened_cooldown(
@@ -694,7 +703,7 @@ class LinearGridBaseFutures(BybitStrategy):
                             self.current_leverage
                         )
                     except Exception as e:
-                        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Hardened grid AR exception caught {e}")
+                        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Hardened grid AR exception caught {e}")
 
                     try:
                         self.auto_reduce_logic_grid_hardened(
@@ -719,7 +728,7 @@ class LinearGridBaseFutures(BybitStrategy):
                             self.current_leverage
                         )
                     except Exception as e:
-                        logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Hardened grid AR exception caught {e}")
+                        logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Hardened grid AR exception caught {e}")
                         
                     self.auto_reduce_percentile_logic(
                         symbol,
@@ -790,8 +799,8 @@ class LinearGridBaseFutures(BybitStrategy):
                     previous_one_minute_distance = one_minute_distance
 
 
-                    # logging.info(f"Short take profit for {symbol}: {short_take_profit}")
-                    # logging.info(f"Long take profit for {symbol}: {long_take_profit}")
+                    # logger.info(f"Short take profit for {symbol}: {short_take_profit}")
+                    # logger.info(f"Long take profit for {symbol}: {long_take_profit}")
 
                     # Handling best ask price with fallback and type conversion
                     if 'asks' in order_book and len(order_book['asks']) > 0:
@@ -800,7 +809,7 @@ class LinearGridBaseFutures(BybitStrategy):
                     else:
                         best_ask_price = self.last_known_ask.get(symbol, 0.0)  # Fallback to 0.0 if not available
                         if best_ask_price == 0.0:
-                            logging.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best ask price is not available for {symbol}. Defaulting to 0.0.")
+                            logger.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best ask price is not available for {symbol}. Defaulting to 0.0.")
 
                     # Handling best bid price with fallback and type conversion
                     if 'bids' in order_book and len(order_book['bids']) > 0:
@@ -809,7 +818,7 @@ class LinearGridBaseFutures(BybitStrategy):
                     else:
                         best_bid_price = self.last_known_bid.get(symbol, 0.0)  # Fallback to 0.0 if not available
                         if best_bid_price == 0.0:
-                            logging.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best bid price is not available for {symbol}. Defaulting to 0.0.")
+                            logger.warning(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Best bid price is not available for {symbol}. Defaulting to 0.0.")
 
                     # Ensure valid decisions on whether to short or long based on conditions
                     should_short = self.short_trade_condition(best_ask_price, ma_3_high)
@@ -825,7 +834,7 @@ class LinearGridBaseFutures(BybitStrategy):
                     if long_pos_price is not None:
                         should_add_to_long = long_pos_price > ma_6_high and self.long_trade_condition(best_bid_price, ma_6_low)
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Five minute volume for {symbol} : {five_minute_volume}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Five minute volume for {symbol} : {five_minute_volume}")
                         
                     # historical_data = self.fetch_historical_data(
                     #     symbol,
@@ -834,11 +843,11 @@ class LinearGridBaseFutures(BybitStrategy):
 
                     # one_hour_atr_value = self.calculate_atr(historical_data)
 
-                    # logging.info(f"ATR for {symbol} : {one_hour_atr_value}")
+                    # logger.info(f"ATR for {symbol} : {one_hour_atr_value}")
 
                     tp_order_counts = self.exchange.get_open_tp_order_count(open_orders)
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open TP order count {tp_order_counts}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Open TP order count {tp_order_counts}")
 
                     # Check for long position
                     if long_pos_qty > 0:
@@ -847,11 +856,11 @@ class LinearGridBaseFutures(BybitStrategy):
                             long_upnl = unrealized_pnl.get('long')
                             self.last_known_upnl[symbol] = self.last_known_upnl.get(symbol, {})
                             self.last_known_upnl[symbol]['long'] = long_upnl  # Store the last known long uPNL
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long UPNL for {symbol}: {long_upnl}")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long UPNL for {symbol}: {long_upnl}")
                         except Exception as e:
                             # Fallback to last known uPNL if an exception occurs
                             long_upnl = self.last_known_upnl.get(symbol, {}).get('long', 0.0)
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception fetching Long UPNL for {symbol}: {e}. Using last known UPNL: {long_upnl}")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception fetching Long UPNL for {symbol}: {e}. Using last known UPNL: {long_upnl}")
 
                     # Check for short position
                     if short_pos_qty > 0:
@@ -860,11 +869,11 @@ class LinearGridBaseFutures(BybitStrategy):
                             short_upnl = unrealized_pnl.get('short')
                             self.last_known_upnl[symbol] = self.last_known_upnl.get(symbol, {})
                             self.last_known_upnl[symbol]['short'] = short_upnl  # Store the last known short uPNL
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short UPNL for {symbol}: {short_upnl}")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short UPNL for {symbol}: {short_upnl}")
                         except Exception as e:
                             # Fallback to last known uPNL if an exception occurs
                             short_upnl = self.last_known_upnl.get(symbol, {}).get('short', 0.0)
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception fetching Short UPNL for {symbol}: {e}. Using last known UPNL: {short_upnl}")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Exception fetching Short UPNL for {symbol}: {e}. Using last known UPNL: {short_upnl}")
 
                     long_tp_counts = tp_order_counts['long_tp_count']
                     short_tp_counts = tp_order_counts['short_tp_count']
@@ -911,32 +920,32 @@ class LinearGridBaseFutures(BybitStrategy):
                             stop_loss_enabled
                         )
                     except Exception as e:
-                        logging.error(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Something is up with variables for the grid {e}")
+                        logger.error(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Something is up with variables for the grid {e}")
 
                     # Calculate take profit for short and long positions using quickscalp method
                     short_take_profit = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
                     long_take_profit = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, min_upnl_profit_pct=upnl_profit_pct, max_upnl_profit_pct=max_upnl_profit_pct)
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long tp counts: {long_tp_counts}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short tp counts: {short_tp_counts}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long tp counts: {long_tp_counts}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short tp counts: {short_tp_counts}")
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long pos qty {long_pos_qty} for {symbol}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short pos qty {short_pos_qty} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long pos qty {long_pos_qty} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short pos qty {short_pos_qty} for {symbol}")
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long take profit {long_take_profit} for {symbol}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short take profit {short_take_profit} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long take profit {long_take_profit} for {symbol}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short take profit {short_take_profit} for {symbol}")
 
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long TP order count for {symbol} is {tp_order_counts['long_tp_count']}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short TP order count for {symbol} is {tp_order_counts['short_tp_count']}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Long TP order count for {symbol} is {tp_order_counts['long_tp_count']}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Short TP order count for {symbol} is {tp_order_counts['short_tp_count']}")
 
                     current_latest_time = datetime.now()
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current time: {current_latest_time}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Next long TP update time: {self.next_long_tp_update}")
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Next short TP update time: {self.next_short_tp_update}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Current time: {current_latest_time}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Next long TP update time: {self.next_long_tp_update}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Next short TP update time: {self.next_short_tp_update}")
 
 
                     # Before calling update_quickscalp_tp_dynamic
-                    logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Before updating TP - Current time: {datetime.now()}, Next long TP update: {self.next_long_tp_update}, Next short TP update: {self.next_short_tp_update}")
+                    logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Before updating TP - Current time: {datetime.now()}, Next long TP update: {self.next_long_tp_update}, Next short TP update: {self.next_short_tp_update}")
 
                     # Update TP for long position
                     if long_pos_qty > 0:
@@ -957,7 +966,7 @@ class LinearGridBaseFutures(BybitStrategy):
                                 tp_order_counts=tp_order_counts,
                                 open_orders=open_orders
                             )
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Updated long TP time: {self.next_long_tp_update}")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Updated long TP time: {self.next_long_tp_update}")
 
                     if short_pos_qty > 0:
                         new_short_tp_min, new_short_tp_max = self.calculate_quickscalp_short_take_profit_dynamic_distance(
@@ -977,14 +986,14 @@ class LinearGridBaseFutures(BybitStrategy):
                                 tp_order_counts=tp_order_counts,
                                 open_orders=open_orders
                             )
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Updated short TP time: {self.next_short_tp_update}")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Updated short TP time: {self.next_short_tp_update}")
 
                     if self.test_orders_enabled and current_time - self.last_helper_order_cancel_time >= self.helper_interval:
                         if symbol in open_symbols:
                             self.helper_active = True
                             self.helperv2(symbol, short_dynamic_amount_helper, long_dynamic_amount_helper)
                         else:
-                            logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Skipping test orders for {symbol} as it's not in open symbols list.")
+                            logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Skipping test orders for {symbol} as it's not in open symbols list.")
                             
                     # # Check if the symbol should terminate
                     # if self.should_terminate_full(symbol, current_time, previous_long_pos_qty, long_pos_qty, previous_short_pos_qty, short_pos_qty):
@@ -993,7 +1002,7 @@ class LinearGridBaseFutures(BybitStrategy):
 
                     # Check to terminate the loop if both long and short are no longer running
                     if not self.running_long and not self.running_short:
-                        logging.info("[Thread-{self.thread_id}] [[{self.symbol}]] Both long and short operations have ended. Preparing to exit loop.")
+                        logger.info("[Thread-{self.thread_id}] [[{self.symbol}]] Both long and short operations have ended. Preparing to exit loop.")
                         shared_symbols_data.pop(symbol, None)  # Remove the symbol from shared symbols data
                         # This will cause the loop condition to fail naturally without a break, making the code flow cleaner
                 
@@ -1006,6 +1015,7 @@ class LinearGridBaseFutures(BybitStrategy):
                 
                 symbol_data = {
                     'symbol': symbol,
+                    # 'loop_count': loop_counter,  # Include loop count if desired
                     'min_qty': min_qty,
                     'current_price': current_price,
                     'balance': total_equity,
@@ -1033,45 +1043,45 @@ class LinearGridBaseFutures(BybitStrategy):
                             json.dump(data_to_save, f)
                         self.update_shared_data(symbol_data, open_position_data, len(open_symbols))
                     except Exception as e:
-                        logging.info(f"Dashboard saving is not working properly {e}")
+                        logger.info(f"Dashboard saving is not working properly {e}")
 
                 if self.config.dashboard_enabled:
                     try:
                         dashboard_path = os.path.join(self.config.shared_data_path, "shared_data.json")
-                        logging.info(f"Dashboard path: {dashboard_path}")
+                        logger.info(f"Dashboard path: {dashboard_path}")
 
                         # Ensure the directory exists
                         os.makedirs(os.path.dirname(dashboard_path), exist_ok=True)
-                        logging.info(f"Directory created: {os.path.dirname(dashboard_path)}")
+                        logger.info(f"Directory created: {os.path.dirname(dashboard_path)}")
 
                         if os.path.exists(dashboard_path):
                             with open(dashboard_path, "r") as file:
                                 # Read or process file data
                                 data = json.load(file)
-                                logging.info("Loaded existing data from shared_data.json")
+                                logger.info("Loaded existing data from shared_data.json")
                         else:
-                            logging.warning("shared_data.json does not exist. Creating a new file.")
+                            logger.warning("shared_data.json does not exist. Creating a new file.")
                             data = {}  # Initialize data as an empty dictionary
 
                         # Save the updated data to the JSON file
                         with open(dashboard_path, "w") as file:
                             json.dump(data, file)
-                            logging.info("Data saved to shared_data.json")
+                            logger.info("Data saved to shared_data.json")
 
                     except FileNotFoundError:
-                        logging.info(f"File not found: {dashboard_path}")
+                        logger.info(f"File not found: {dashboard_path}")
                         # Handle the absence of the file, e.g., by creating it or using default data
                     except IOError as e:
-                        logging.info(f"I/O error occurred: {e}")
+                        logger.info(f"I/O error occurred: {e}")
                         # Handle other I/O errors
                     except Exception as e:
-                        logging.info(f"An unexpected error occurred in saving json: {e}")
+                        logger.info(f"An unexpected error occurred in saving json: {e}")
                         
                 iteration_end_time = time.time()  # Record the end time of the iteration
                 iteration_duration = iteration_end_time - iteration_start_time
-                logging.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Iteration for symbol {symbol} took {iteration_duration:.2f} seconds")
+                logger.info(f"[Thread-{self.thread_id}] [[{self.symbol}]] [act:{self.action}] (loop #{loop_counter}) (caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) Iteration for symbol {symbol} took {iteration_duration:.2f} seconds")
 
                 time.sleep(3)
         except Exception as e:
             traceback_info = traceback.format_exc()  # Get the full traceback
-            logging.info(f"Exception caught in quickscalp strategy '{symbol}': {e}\nTraceback:\n{traceback_info}")
+            logger.info(f"Exception caught in quickscalp strategy '{symbol}': {e}\nTraceback:\n{traceback_info}")
