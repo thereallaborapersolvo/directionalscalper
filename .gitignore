@@ -185,3 +185,10 @@ logs/LinearGridBase.log.1
 ZZZZZ.py
 zzzzz.py
 z_log_parser.py
+
+
+BybitBaseStrategy_*.log
+BybitBaseStrategy_*.log.*
+
+LinearGridBase.log.*
+dirscalp*.json
