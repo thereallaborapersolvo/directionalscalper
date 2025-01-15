@@ -15,6 +15,7 @@ import requests, hmac, hashlib
 import urllib.parse
 import threading
 import traceback
+import inspect
 from typing import Optional, Tuple, List
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import DBSCAN
@@ -23,6 +24,7 @@ from ..strategies.logger import Logger
 from requests.exceptions import HTTPError
 from datetime import datetime, timedelta
 from ccxt.base.errors import NetworkError
+
 
 logging = Logger(logger_name="Exchange", filename="Exchange.log", stream=True)
 
@@ -398,15 +400,15 @@ class Exchange:
                 new_signal = 'short'
 
             current_time = time.time()
-            logging.info(f"New signal for {symbol} : {new_signal}")
-            logging.info(f"Last signal for {symbol} : {self.last_signal.get(symbol, 'None')}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] New signal for {symbol} : {new_signal}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Last signal for {symbol} : {self.last_signal.get(symbol, 'None')}")
 
             # Avoid double entries and ensure signal change
             if symbol in self.last_signal:
                 if self.last_signal[symbol] == new_signal and new_signal != 'neutral':
                     # Check if sufficient time has passed to act on the same signal
                     if current_time - self.last_signal_time[symbol] < 15:  # 15 second buffer
-                        logging.info(f"Returning {new_signal} because {self.last_signal[symbol]} is same as new signal and time difference is within buffer")
+                        logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Returning {new_signal} because {self.last_signal[symbol]} is same as new signal and time difference is within buffer")
                         return new_signal  # Return the same signal if within the buffer time
                     else:
                         self.last_signal_time[symbol] = current_time
@@ -420,7 +422,7 @@ class Exchange:
                 self.last_signal_time[symbol] = current_time
                 return new_signal
         except Exception as e:
-            logging.info(f"Error in calculating signal: {e}")
+            logging.info(f"(caller: {inspect.stack()[1].function}, func: {inspect.currentframe().f_code.co_name}, line: {inspect.currentframe().f_lineno}) [[{symbol}]] Error in calculating signal: {e}")
             return 'neutral'
         
     # def generate_l_signals(self, symbol, limit=3000, neighbors_count=8, use_adx_filter=False, adx_threshold=20):
