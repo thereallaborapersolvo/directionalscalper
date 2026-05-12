@@ -555,7 +555,7 @@ class BybitQuickScalpTrendDynamicTP(BybitStrategy):
                     shared_symbols_data.pop(symbol, None)  # Remove the symbol from shared_symbols_data
 
                 # If the symbol is in rotator_symbols and either it's already being traded or trading is allowed.
-                if symbol in rotator_symbols_standardized or (symbol in open_symbols or trading_allowed): # and instead of or
+                if symbol in open_symbols or trading_allowed:
 
                     # Fetch the API data
                     api_data = self.manager.get_api_data(symbol)

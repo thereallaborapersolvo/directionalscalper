@@ -997,6 +997,14 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
     # Check if there are open long/short positions for the symbol
     has_open_long = symbol in active_long_symbols
     has_open_short = symbol in active_short_symbols
+    is_existing_symbol = is_open_position or symbol in open_position_symbols or has_open_long or has_open_short
+
+    if not is_existing_symbol and len(open_position_symbols) >= symbols_allowed:
+        logging.info(
+            f"Skipping new symbol {symbol}: open symbol count {len(open_position_symbols)} "
+            f"has reached symbols_allowed={symbols_allowed}."
+        )
+        return False
 
     # Log details about the current state and modes
     logging.info(f"{'Open position' if is_open_position else 'New rotator'} symbol {symbol} - "
@@ -1021,7 +1029,12 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
 
     # Handle long signals for open positions or new symbols
     if signal_long and long_mode and not has_open_long:
-        if graceful_stop_long:
+        if not is_existing_symbol and current_long_positions >= symbols_allowed:
+            logging.info(
+                f"Skipping long signal for {symbol}: active long count {current_long_positions} "
+                f"has reached symbols_allowed={symbols_allowed}."
+            )
+        elif graceful_stop_long:
             logging.info(f"Skipping long signal for {symbol} due to graceful stop long enabled.")
         else:
             logging.info(f"Starting long thread for symbol {symbol}.")
@@ -1032,7 +1045,12 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
 
     # Handle short signals for open positions or new symbols
     if signal_short and short_mode and not has_open_short:
-        if graceful_stop_short:
+        if not is_existing_symbol and current_short_positions >= symbols_allowed:
+            logging.info(
+                f"Skipping short signal for {symbol}: active short count {current_short_positions} "
+                f"has reached symbols_allowed={symbols_allowed}."
+            )
+        elif graceful_stop_short:
             logging.info(f"Skipping short signal for {symbol} due to graceful stop short enabled.")
         else:
             logging.info(f"Starting short thread for symbol {symbol}.")
