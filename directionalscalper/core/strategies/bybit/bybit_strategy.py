@@ -154,6 +154,53 @@ class BybitStrategy(BaseStrategy):
                 count += 1
         return count
 
+    def select_entry_allowed_symbols(
+        self,
+        open_symbols: list,
+        symbols_allowed: int = None,
+        rotator_symbols_standardized: list = None,
+    ) -> list:
+        if symbols_allowed is None:
+            symbols_allowed = self.symbols_allowed
+
+        try:
+            symbol_limit = int(symbols_allowed) if symbols_allowed is not None else None
+        except (TypeError, ValueError):
+            symbol_limit = None
+
+        ordered_open_symbols = []
+        seen_open_symbols = set()
+        for open_symbol in open_symbols or []:
+            if not open_symbol:
+                continue
+            standardized_symbol = str(open_symbol).upper()
+            if standardized_symbol not in seen_open_symbols:
+                ordered_open_symbols.append(standardized_symbol)
+                seen_open_symbols.add(standardized_symbol)
+
+        if symbol_limit is None:
+            return ordered_open_symbols
+        if symbol_limit <= 0:
+            return []
+        if len(ordered_open_symbols) <= symbol_limit:
+            return ordered_open_symbols
+
+        rotator_open_symbols = []
+        seen_rotator_symbols = set()
+        for rotator_symbol in rotator_symbols_standardized or []:
+            if not rotator_symbol:
+                continue
+            standardized_symbol = str(rotator_symbol).upper()
+            if standardized_symbol in seen_open_symbols and standardized_symbol not in seen_rotator_symbols:
+                rotator_open_symbols.append(standardized_symbol)
+                seen_rotator_symbols.add(standardized_symbol)
+
+        overflow_open_symbols = [
+            open_symbol for open_symbol in ordered_open_symbols
+            if open_symbol not in seen_rotator_symbols
+        ]
+        return (rotator_open_symbols + overflow_open_symbols)[:symbol_limit]
+
     def get_max_side_positions_allowed(
         self,
         symbols_allowed: int = None,
@@ -6071,6 +6118,7 @@ class BybitStrategy(BaseStrategy):
         sticky_size_target_profit: float = 0.001,
         sticky_size_use_orderbook: bool = True,
         sticky_size_min_volume_ratio: float = 0.2,
+        rotator_symbols_standardized: list = None,
     ):
         """
         Full linear‑grid driver supporting:
@@ -7259,7 +7307,8 @@ class BybitStrategy(BaseStrategy):
                 DRAWDOWN_CLOSE_THRESHOLD=DRAWDOWN_CLOSE_THRESHOLD,
                 max_usd_position_value_long=max_usd_position_value_long,
                 max_usd_position_value_short=max_usd_position_value_short,
-                one_symbol_optimization=one_symbol_optimization
+                one_symbol_optimization=one_symbol_optimization,
+                rotator_symbols_standardized=rotator_symbols_standardized
             )
 
             logging.info(f"[{symbol}] ▶ open_symbols = {open_symbols}")
@@ -7881,7 +7930,8 @@ class BybitStrategy(BaseStrategy):
         DRAWDOWN_CLOSE_THRESHOLD: float = 30.0,
         max_usd_position_value_long: float = None,
         max_usd_position_value_short: float = None,
-        one_symbol_optimization: bool = False
+        one_symbol_optimization: bool = False,
+        rotator_symbols_standardized: list = None
     ):
         """
         Executes placement/replacement of grids, stop-loss, auto-hedge,
@@ -7935,14 +7985,24 @@ class BybitStrategy(BaseStrategy):
                 symbol_limit = int(symbols_allowed) if symbols_allowed is not None else None
             except (TypeError, ValueError):
                 symbol_limit = None
+            entry_allowed_symbols = self.select_entry_allowed_symbols(
+                open_symbols,
+                symbol_limit,
+                rotator_symbols_standardized=rotator_symbols_standardized,
+            )
+            entry_allowed_symbol_set = set(entry_allowed_symbols)
+            standardized_symbol = str(symbol).upper()
             entry_blocked_by_symbol_cap = (
-                symbol_limit is not None and unique_open_symbol_count > symbol_limit
+                symbol_limit is not None
+                and unique_open_symbol_count > symbol_limit
+                and standardized_symbol not in entry_allowed_symbol_set
             )
             logging.info(
                 f"[{symbol}] Side position count: {side_position_count}; "
                 f"max side positions allowed: {max_side_positions_allowed}; "
                 f"unique open symbols: {unique_open_symbol_count}; "
-                f"symbols allowed: {symbol_limit}"
+                f"symbols allowed: {symbol_limit}; "
+                f"entry allowed symbols: {entry_allowed_symbols}"
             )
 
             # ======================================================================
@@ -8216,7 +8276,8 @@ class BybitStrategy(BaseStrategy):
 
             if entry_blocked_by_symbol_cap:
                 logging.info(
-                    f"[{symbol}] Pre-blocking entry grids: unique open symbol count "
+                    f"[{symbol}] Pre-blocking entry grids: symbol is outside entry allowed set "
+                    f"{entry_allowed_symbols} while unique open symbol count "
                     f"{unique_open_symbol_count} exceeds symbols_allowed={symbol_limit}."
                 )
                 self.clear_grid(symbol, "buy", exclude_xgrid=False)
@@ -8376,7 +8437,8 @@ class BybitStrategy(BaseStrategy):
 
             if entry_blocked_by_symbol_cap:
                 logging.info(
-                    f"[{symbol}] Blocking entry grids: unique open symbol count "
+                    f"[{symbol}] Blocking entry grids: symbol is outside entry allowed set "
+                    f"{entry_allowed_symbols} while unique open symbol count "
                     f"{unique_open_symbol_count} exceeds symbols_allowed={symbol_limit}."
                 )
                 self.clear_grid(symbol, "buy", exclude_xgrid=False)

@@ -888,7 +888,8 @@ class LinearGridBaseFutures(BybitStrategy):
                             sticky_size_max_multiplier,
                             sticky_size_target_profit,
                             sticky_size_use_orderbook,
-                            sticky_size_min_volume_ratio
+                            sticky_size_min_volume_ratio,
+                            rotator_symbols_standardized=rotator_symbols_standardized
                         )
                     except Exception as e:
                         logging.info(f"Something went wrong in lineargrid_base: {e}")

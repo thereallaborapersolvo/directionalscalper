@@ -1448,8 +1448,16 @@ def fetch_updated_symbols(args, manager, whitelist=None):
         else:
             potential_symbols = manager.get_auto_rotate_symbols(min_qty_threshold=None, blacklist=blacklist, whitelist=whitelist, max_usd_value=max_usd_value)
 
-    # Update the cache with new data and timestamp
-    rotator_symbols_cache['symbols'] = set(standardize_symbol(sym) for sym in potential_symbols)
+    standardized_symbols = []
+    seen_symbols = set()
+    for symbol in potential_symbols:
+        standardized_symbol = standardize_symbol(symbol)
+        if standardized_symbol not in seen_symbols:
+            standardized_symbols.append(standardized_symbol)
+            seen_symbols.add(standardized_symbol)
+
+    # Update the cache with new data and timestamp while preserving rotator order.
+    rotator_symbols_cache['symbols'] = standardized_symbols
     rotator_symbols_cache['timestamp'] = current_time
     
     logging.info(f"Fetched new rotator symbols: {rotator_symbols_cache['symbols']}")
