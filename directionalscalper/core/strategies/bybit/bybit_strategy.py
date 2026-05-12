@@ -36,6 +36,7 @@ from rate_limit import RateLimit
 logging = Logger(logger_name="BybitBaseStrategy", filename="BybitBaseStrategy.log", stream=True)
 
 grid_lock = threading.Lock()
+hedge_positions_lock = threading.Lock()
 
 class BybitStrategy(BaseStrategy):
     def __init__(self, exchange, config, manager, symbols_allowed=None):
@@ -162,23 +163,35 @@ class BybitStrategy(BaseStrategy):
             return
 
         try:
-            with open(file_path, "r") as f:
-                content = f.read().strip()
+            with hedge_positions_lock:
+                with open(file_path, "r") as f:
+                    content = f.read().strip()
 
-            if not content:
-                logging.warning(f"{file_path} is empty => starting with an empty hedge_positions.")
-                self.hedge_positions = {}
-                return
+                if not content:
+                    logging.warning(f"{file_path} is empty => starting with an empty hedge_positions.")
+                    self.hedge_positions = {}
+                    return
 
-            data = json.loads(content)
-            if not isinstance(data, dict):
-                logging.warning(f"{file_path} structure invalid; ignoring file.")
-                self.hedge_positions = {}
-                return
+                try:
+                    data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    backup_path = f"{file_path}.corrupt.{int(time.time())}"
+                    try:
+                        os.replace(file_path, backup_path)
+                        logging.error(f"Failed to parse {file_path}: {e}. Moved corrupt file to {backup_path}.")
+                    except OSError as backup_error:
+                        logging.error(f"Failed to parse {file_path}: {e}. Could not move corrupt file: {backup_error}")
+                    self.hedge_positions = {}
+                    return
 
-            # Start with the loaded data
-            self.hedge_positions = data
-            logging.info(f"Loaded hedge positions from {file_path}.")
+                if not isinstance(data, dict):
+                    logging.warning(f"{file_path} structure invalid; ignoring file.")
+                    self.hedge_positions = {}
+                    return
+
+                # Start with the loaded data
+                self.hedge_positions = data
+                logging.info(f"Loaded hedge positions from {file_path}.")
 
             # Migrate any old single-hedge top-level keys to the new subdict structure:
             old_keys_to_remove = [
@@ -227,7 +240,6 @@ class BybitStrategy(BaseStrategy):
             logging.error(f"Failed to load {file_path}: {e}")
             self.hedge_positions = {}
 
-
     def save_hedge_positions(self, file_path: str = None):
         """
         Save hedge positions to disk in the subdict structure only.
@@ -267,12 +279,27 @@ class BybitStrategy(BaseStrategy):
                     if k in info:
                         del info[k]
 
-            with open(file_path, "w") as f:
-                json.dump(self.hedge_positions, f, indent=2)
+            directory = os.path.dirname(file_path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+
+            tmp_path = f"{file_path}.tmp.{os.getpid()}.{threading.get_ident()}"
+            with hedge_positions_lock:
+                with open(tmp_path, "w") as f:
+                    json.dump(self.hedge_positions, f, indent=2)
+                    f.write("\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, file_path)
 
             logging.info(f"Saved hedge positions to {file_path}.")
         except Exception as e:
             logging.error(f"Failed to save {file_path}: {e}")
+            try:
+                if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
 
 
     def _cleanup_corrupted_hedge_tracking(self):
