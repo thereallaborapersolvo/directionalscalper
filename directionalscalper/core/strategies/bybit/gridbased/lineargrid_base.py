@@ -171,6 +171,10 @@ class LinearGridBaseFutures(BybitStrategy):
             strength = self.config.linear_grid['strength']
             long_mode = self.config.linear_grid['long_mode']
             short_mode = self.config.linear_grid['short_mode']
+            if action == "long":
+                short_mode = False
+            elif action == "short":
+                long_mode = False
             reissue_threshold = self.config.linear_grid['reissue_threshold']
             buffer_percentage = self.config.linear_grid['buffer_percentage']
             enforce_full_grid = self.config.linear_grid['enforce_full_grid']
@@ -346,6 +350,18 @@ class LinearGridBaseFutures(BybitStrategy):
                 open_symbols = self.extract_symbols_from_positions_bybit(open_position_data)
                 open_symbols = [symbol.replace("/", "") for symbol in open_symbols]
                 logging.info(f"Open symbols: {open_symbols}")
+                side_position_count = sum(
+                    1
+                    for pos in open_position_data
+                    if float(pos.get('contracts') or pos.get('info', {}).get('size') or 0) > 0
+                )
+                if self.symbols_allowed is not None and side_position_count >= self.symbols_allowed:
+                    graceful_stop_long = True
+                    graceful_stop_short = True
+                    logging.info(
+                        f"Side position count {side_position_count} has reached "
+                        f"symbols_allowed={self.symbols_allowed}; forcing graceful stop for entries."
+                    )
                 open_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
 
                 #logging.info(f"Open symbols: {open_symbols}")

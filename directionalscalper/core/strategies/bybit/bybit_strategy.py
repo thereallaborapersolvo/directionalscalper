@@ -8249,6 +8249,13 @@ class BybitStrategy(BaseStrategy):
             )
             logging.info(f"[{symbol}] grid_open_orders IDs: {[o['id'] for o in grid_open_orders]}")
 
+            if graceful_stop_long:
+                self.clear_grid(symbol, "buy", exclude_xgrid=False)
+                skip_long_side = True
+            if graceful_stop_short:
+                self.clear_grid(symbol, "sell", exclude_xgrid=False)
+                skip_short_side = True
+
             # ======================================================================
             # 5  INITIAL ENTRY
             # ======================================================================

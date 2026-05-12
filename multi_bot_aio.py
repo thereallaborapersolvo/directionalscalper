@@ -903,9 +903,15 @@ def handle_signal_targetcoin(symbol, args, manager, signal, open_position_data, 
     # Log the status of the bot's current positions
     current_long_positions = len(active_long_symbols)
     current_short_positions = len(active_short_symbols)
+    current_side_positions = sum(
+        1
+        for pos in open_position_data
+        if float(pos.get('contracts') or pos.get('info', {}).get('size') or 0) > 0
+    )
     logging.info(f"Handling signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. "
                  f"Current long positions: {current_long_positions}. "
                  f"Current short positions: {current_short_positions}. "
+                 f"Current side positions: {current_side_positions}. "
                  f"Unique active symbols: {len(unique_active_symbols)}")
 
     logging.info(f"Active long symbols: {active_long_symbols}")
@@ -986,9 +992,15 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
     # Log the status of the bot's current positions
     current_long_positions = len(active_long_symbols)
     current_short_positions = len(active_short_symbols)
+    current_side_positions = sum(
+        1
+        for pos in open_position_data
+        if float(pos.get('contracts') or pos.get('info', {}).get('size') or 0) > 0
+    )
     logging.info(f"Handling signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. "
                  f"Current long positions: {current_long_positions}. "
                  f"Current short positions: {current_short_positions}. "
+                 f"Current side positions: {current_side_positions}. "
                  f"Unique active symbols: {len(unique_active_symbols)}")
 
     logging.info(f"Active long symbols: {active_long_symbols}")
@@ -1029,7 +1041,12 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
 
     # Handle long signals for open positions or new symbols
     if signal_long and long_mode and not has_open_long:
-        if not is_existing_symbol and current_long_positions >= symbols_allowed:
+        if current_side_positions >= symbols_allowed:
+            logging.info(
+                f"Skipping long signal for {symbol}: side position count {current_side_positions} "
+                f"has reached symbols_allowed={symbols_allowed}."
+            )
+        elif not is_existing_symbol and current_long_positions >= symbols_allowed:
             logging.info(
                 f"Skipping long signal for {symbol}: active long count {current_long_positions} "
                 f"has reached symbols_allowed={symbols_allowed}."
@@ -1045,7 +1062,12 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
 
     # Handle short signals for open positions or new symbols
     if signal_short and short_mode and not has_open_short:
-        if not is_existing_symbol and current_short_positions >= symbols_allowed:
+        if current_side_positions >= symbols_allowed:
+            logging.info(
+                f"Skipping short signal for {symbol}: side position count {current_side_positions} "
+                f"has reached symbols_allowed={symbols_allowed}."
+            )
+        elif not is_existing_symbol and current_short_positions >= symbols_allowed:
             logging.info(
                 f"Skipping short signal for {symbol}: active short count {current_short_positions} "
                 f"has reached symbols_allowed={symbols_allowed}."
