@@ -143,6 +143,29 @@ def print_cool_trading_info(symbol, exchange_name, strategy_name, account_name):
 def standardize_symbol(symbol):
     return symbol.replace('/', '').split(':')[0]
 
+def count_open_side_positions(open_position_data):
+    count = 0
+    for pos in open_position_data:
+        try:
+            contracts = float(pos.get('contracts') or pos.get('info', {}).get('size') or 0)
+        except (TypeError, ValueError):
+            contracts = 0
+        if contracts > 0:
+            count += 1
+    return count
+
+def get_max_side_positions_allowed(symbols_allowed, long_mode=True, short_mode=True, auto_hedge_enabled=False):
+    if symbols_allowed is None:
+        return None
+
+    try:
+        symbols_allowed = int(symbols_allowed)
+    except (TypeError, ValueError):
+        return None
+
+    sides_per_symbol = 2 if auto_hedge_enabled or (long_mode and short_mode) else 1
+    return symbols_allowed * sides_per_symbol
+
 def get_available_strategies():
     return [
         'qsgridob',
@@ -547,10 +570,18 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
     config_graceful_stop_long = config.bot.linear_grid.get('graceful_stop_long', False)
     config_graceful_stop_short = config.bot.linear_grid.get('graceful_stop_short', False)
     config_auto_graceful_stop = config.bot.linear_grid.get('auto_graceful_stop', False)
+    auto_hedge_enabled = config.bot.linear_grid.get('auto_hedge_enabled', False)
+    max_side_positions_allowed = get_max_side_positions_allowed(
+        symbols_allowed,
+        long_mode=long_mode,
+        short_mode=short_mode,
+        auto_hedge_enabled=auto_hedge_enabled,
+    )
     target_coins_mode = config.bot.linear_grid.get('target_coins_mode', False)
     whitelist = set(config.bot.whitelist) if len(config.bot.whitelist) > 0 else None
 
     logging.info(f"Target coins mode is {'enabled' if target_coins_mode else 'disabled'}")
+    logging.info(f"Max side positions allowed: {max_side_positions_allowed}")
 
     def fetch_open_positions():
         with general_rate_limiter:
@@ -560,8 +591,8 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
     current_long_positions = sum(1 for pos in open_position_data if pos['side'].lower() == 'long')
     current_short_positions = sum(1 for pos in open_position_data if pos['side'].lower() == 'short')
 
-    graceful_stop_long = current_long_positions >= symbols_allowed or config_graceful_stop_long
-    graceful_stop_short = current_short_positions >= symbols_allowed or config_graceful_stop_short
+    graceful_stop_long = config_graceful_stop_long
+    graceful_stop_short = config_graceful_stop_short
 
     logging.info(f"Long mode: {long_mode}")
     logging.info(f"Short mode: {short_mode}")
@@ -645,7 +676,7 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
                     # Ensure that we process signals for open positions separately
                     open_position_futures.append(signal_executor.submit(
                         process_signal_for_open_position, 
-                        symbol, args, market_maker, manager, symbols_allowed, open_position_data, long_mode, short_mode, graceful_stop_long, graceful_stop_short
+                        symbol, args, market_maker, manager, symbols_allowed, open_position_data, long_mode, short_mode, graceful_stop_long, graceful_stop_short, max_side_positions_allowed
                     ))
 
                     if has_open_long and not long_thread_running:
@@ -703,7 +734,7 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
                             if (can_open_long and long_mode) or (can_open_short and short_mode):
                                 signal_futures.append(signal_executor.submit(
                                     process_signal, 
-                                    symbol, args, market_maker, manager, symbols_allowed, open_position_data, False, can_open_long, can_open_short, graceful_stop_long, graceful_stop_short
+                                    symbol, args, market_maker, manager, symbols_allowed, open_position_data, False, can_open_long, can_open_short, graceful_stop_long, graceful_stop_short, max_side_positions_allowed
                                 ))
                                 logging.info(f"Submitted signal processing for new symbol {symbol}.")
                                 processed_symbols.add(symbol)
@@ -719,7 +750,7 @@ def bybit_auto_rotation(args, market_maker, manager, symbols_allowed):
                                 symbol, args, market_maker, manager, symbols_allowed, open_position_data, False, 
                                 len(active_long_symbols) < symbols_allowed and not graceful_stop_long, 
                                 len(active_short_symbols) < symbols_allowed and not graceful_stop_short, 
-                                graceful_stop_long, graceful_stop_short
+                                graceful_stop_long, graceful_stop_short, max_side_positions_allowed
                             ))
                             logging.info(f"Submitted signal processing for whitelist symbol without position {symbol}.")
                             time.sleep(0.1)
@@ -846,21 +877,21 @@ def bybit_auto_rotation_spot(args, market_maker, manager, symbols_allowed):
             logging.debug(traceback.format_exc())
         time.sleep(0.1)
 
-def process_signal_for_open_position(symbol, args, market_maker, manager, symbols_allowed, open_position_data, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+def process_signal_for_open_position(symbol, args, market_maker, manager, symbols_allowed, open_position_data, long_mode, short_mode, graceful_stop_long, graceful_stop_short, max_side_positions_allowed=None):
     market_maker.manager = manager
 
     with general_rate_limiter:
         signal = market_maker.get_signal(symbol)  # Use the appropriate signal based on the entry_signal_type
     logging.info(f"Processing signal for open position symbol {symbol}. Signal: {signal}")
 
-    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, True, long_mode, short_mode, graceful_stop_long, graceful_stop_short)
+    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, True, long_mode, short_mode, graceful_stop_long, graceful_stop_short, max_side_positions_allowed)
 
     if action_taken:
         logging.info(f"Action taken for open position symbol {symbol}.")
     else:
         logging.info(f"No action taken for open position symbol {symbol}.")
 
-def process_signal(symbol, args, market_maker, manager, symbols_allowed, open_position_data, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+def process_signal(symbol, args, market_maker, manager, symbols_allowed, open_position_data, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short, max_side_positions_allowed=None):
     market_maker.manager = manager
     signal = market_maker.get_signal(symbol)  # Use the appropriate signal based on the entry_signal_type
 
@@ -870,7 +901,7 @@ def process_signal(symbol, args, market_maker, manager, symbols_allowed, open_po
 
     logging.info(f"Processing signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. Signal: {signal}")
 
-    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short)
+    action_taken = handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short, max_side_positions_allowed)
 
     if action_taken:
         logging.info(f"Action taken for {'open position' if is_open_position else 'new rotator'} symbol {symbol}.")
@@ -974,7 +1005,7 @@ def handle_signal_targetcoin(symbol, args, manager, signal, open_position_data, 
     # Return the result indicating whether any action was taken
     return action_taken_long or action_taken_short
 
-def handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short):
+def handle_signal(symbol, args, manager, signal, open_position_data, symbols_allowed, is_open_position, long_mode, short_mode, graceful_stop_long, graceful_stop_short, max_side_positions_allowed=None):
     global unique_active_symbols, active_long_symbols, active_short_symbols
 
     # Log receipt of the signal and handle neutral signals for open positions early
@@ -992,15 +1023,18 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
     # Log the status of the bot's current positions
     current_long_positions = len(active_long_symbols)
     current_short_positions = len(active_short_symbols)
-    current_side_positions = sum(
-        1
-        for pos in open_position_data
-        if float(pos.get('contracts') or pos.get('info', {}).get('size') or 0) > 0
-    )
+    current_side_positions = count_open_side_positions(open_position_data)
+    if max_side_positions_allowed is None:
+        max_side_positions_allowed = get_max_side_positions_allowed(
+            symbols_allowed,
+            long_mode=long_mode,
+            short_mode=short_mode,
+        )
     logging.info(f"Handling signal for {'open position' if is_open_position else 'new rotator'} symbol {symbol}. "
                  f"Current long positions: {current_long_positions}. "
                  f"Current short positions: {current_short_positions}. "
                  f"Current side positions: {current_side_positions}. "
+                 f"Max side positions allowed: {max_side_positions_allowed}. "
                  f"Unique active symbols: {len(unique_active_symbols)}")
 
     logging.info(f"Active long symbols: {active_long_symbols}")
@@ -1041,10 +1075,10 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
 
     # Handle long signals for open positions or new symbols
     if signal_long and long_mode and not has_open_long:
-        if current_side_positions >= symbols_allowed:
+        if max_side_positions_allowed is not None and current_side_positions >= max_side_positions_allowed:
             logging.info(
                 f"Skipping long signal for {symbol}: side position count {current_side_positions} "
-                f"has reached symbols_allowed={symbols_allowed}."
+                f"has reached max_side_positions_allowed={max_side_positions_allowed}."
             )
         elif not is_existing_symbol and current_long_positions >= symbols_allowed:
             logging.info(
@@ -1062,10 +1096,10 @@ def handle_signal(symbol, args, manager, signal, open_position_data, symbols_all
 
     # Handle short signals for open positions or new symbols
     if signal_short and short_mode and not has_open_short:
-        if current_side_positions >= symbols_allowed:
+        if max_side_positions_allowed is not None and current_side_positions >= max_side_positions_allowed:
             logging.info(
                 f"Skipping short signal for {symbol}: side position count {current_side_positions} "
-                f"has reached symbols_allowed={symbols_allowed}."
+                f"has reached max_side_positions_allowed={max_side_positions_allowed}."
             )
         elif not is_existing_symbol and current_short_positions >= symbols_allowed:
             logging.info(
@@ -1319,14 +1353,14 @@ def start_thread_for_open_symbol(symbol, args, manager, mfirsi_signal, has_open_
             logging.info(f"[DEBUG] {'Started' if thread_started else 'Failed to start'} short thread for symbol {symbol} based on neutral signal")
 
     else:
-        # Start long thread if long mode is enabled, there is an open long position, and graceful stop is not active
-        if long_mode and has_open_long and not graceful_stop_long and not (symbol in long_threads and long_threads[symbol][0].is_alive()):
+        # Manage existing long positions even when graceful stop is active; the strategy will skip new entries.
+        if long_mode and has_open_long and not (symbol in long_threads and long_threads[symbol][0].is_alive()):
             thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "long", has_open_long, has_open_short)
             action_taken = action_taken or thread_started
             logging.info(f"[DEBUG] {'Started' if thread_started else 'Failed to start'} long thread for open symbol {symbol}")
 
-        # Start short thread if short mode is enabled, there is an open short position, and graceful stop is not active
-        if short_mode and has_open_short and not graceful_stop_short and not (symbol in short_threads and short_threads[symbol][0].is_alive()):
+        # Manage existing short positions even when graceful stop is active; the strategy will skip new entries.
+        if short_mode and has_open_short and not (symbol in short_threads and short_threads[symbol][0].is_alive()):
             thread_started = start_thread_for_symbol(symbol, args, manager, mfirsi_signal, "short", has_open_long, has_open_short)
             action_taken = action_taken or thread_started
             logging.info(f"[DEBUG] {'Started' if thread_started else 'Failed to start'} short thread for open symbol {symbol}")

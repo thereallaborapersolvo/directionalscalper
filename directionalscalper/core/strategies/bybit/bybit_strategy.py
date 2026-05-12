@@ -143,6 +143,70 @@ class BybitStrategy(BaseStrategy):
         base_notional_values = {"BTCUSDT": 100.5, "ETHUSDT": 20.1, "default": 6}
         return base_notional_values.get(symbol, base_notional_values["default"])
 
+    def count_open_side_positions(self, open_position_data: list) -> int:
+        count = 0
+        for pos in open_position_data or []:
+            try:
+                contracts = float(pos.get("contracts") or pos.get("info", {}).get("size") or 0)
+            except (TypeError, ValueError):
+                contracts = 0
+            if contracts > 0:
+                count += 1
+        return count
+
+    def get_max_side_positions_allowed(
+        self,
+        symbols_allowed: int = None,
+        long_mode: bool = True,
+        short_mode: bool = True,
+        auto_hedge_enabled: bool = False,
+    ):
+        if symbols_allowed is None:
+            symbols_allowed = self.symbols_allowed
+        if symbols_allowed is None:
+            return None
+
+        try:
+            symbols_allowed = int(symbols_allowed)
+        except (TypeError, ValueError):
+            return None
+
+        sides_per_symbol = 2 if auto_hedge_enabled or (long_mode and short_mode) else 1
+        return symbols_allowed * sides_per_symbol
+
+    def side_position_entry_blocked(
+        self,
+        symbol: str,
+        side: str,
+        current_side_qty: float,
+        open_position_data: list,
+        max_side_positions_allowed: int = None,
+    ) -> bool:
+        if max_side_positions_allowed is None:
+            return False
+
+        try:
+            current_side_qty = float(current_side_qty or 0)
+        except (TypeError, ValueError):
+            current_side_qty = 0
+
+        side_position_count = self.count_open_side_positions(open_position_data)
+        if side_position_count > max_side_positions_allowed:
+            logging.info(
+                f"[{symbol}] Blocking {side} entries: side position count "
+                f"{side_position_count} exceeds max_side_positions_allowed={max_side_positions_allowed}."
+            )
+            return True
+
+        if current_side_qty <= 0 and side_position_count >= max_side_positions_allowed:
+            logging.info(
+                f"[{symbol}] Blocking new {side} side: side position count "
+                f"{side_position_count} has reached max_side_positions_allowed={max_side_positions_allowed}."
+            )
+            return True
+
+        return False
+
 
     def load_hedge_positions(self, file_path: str = None, validate_threshold: bool = False):
         """
@@ -7856,6 +7920,30 @@ class BybitStrategy(BaseStrategy):
             short_pos_price = short_pos_price or 0.0
             has_open_long   = long_pos_qty > 0
             has_open_short  = short_pos_qty > 0
+            linear_grid_config = getattr(self.config, "linear_grid", {}) or {}
+            configured_long_mode = linear_grid_config.get("long_mode", long_mode)
+            configured_short_mode = linear_grid_config.get("short_mode", short_mode)
+            max_side_positions_allowed = self.get_max_side_positions_allowed(
+                symbols_allowed,
+                long_mode=configured_long_mode,
+                short_mode=configured_short_mode,
+                auto_hedge_enabled=auto_hedge_enabled,
+            )
+            side_position_count = self.count_open_side_positions(open_position_data)
+            unique_open_symbol_count = len(set(open_symbols or []))
+            try:
+                symbol_limit = int(symbols_allowed) if symbols_allowed is not None else None
+            except (TypeError, ValueError):
+                symbol_limit = None
+            entry_blocked_by_symbol_cap = (
+                symbol_limit is not None and unique_open_symbol_count > symbol_limit
+            )
+            logging.info(
+                f"[{symbol}] Side position count: {side_position_count}; "
+                f"max side positions allowed: {max_side_positions_allowed}; "
+                f"unique open symbols: {unique_open_symbol_count}; "
+                f"symbols allowed: {symbol_limit}"
+            )
 
             # ======================================================================
             # 1  POSITION STATE & STOP-LOSS
@@ -7969,55 +8057,71 @@ class BybitStrategy(BaseStrategy):
                     
                     # Hedge SHORT when main LONG moves
                     if has_open_long and price_diff_satisfied(long_pos_price, current_price, auto_hedge_price_diff_threshold):
-                        desired_short_qty = long_pos_qty * auto_hedge_ratio
-                        logging.info(f"[AUTO-HEDGE] {symbol} TRIGGERING SHORT HEDGE: long_qty={long_pos_qty}, desired_short_qty={desired_short_qty}, min_size={auto_hedge_min_position_size}")
-                        if desired_short_qty >= auto_hedge_min_position_size:
-                            # Use grid behavior for hedge placement if hedge_with_grid is enabled
-                            if hedge_with_grid:
-                                self.open_or_adjust_hedge_multi_with_grid(
-                                    symbol,
-                                    hedge_side="short",
-                                    desired_qty=desired_short_qty,
-                                    forcibly_close_hedge=forcibly_close_hedge,
-                                    use_grid_behavior=True,
-                                    one_symbol_optimization=one_symbol_optimization,
-                                    grid_behavior=grid_behavior,
-                                    drawdown_behavior=drawdown_behavior
-                                )
-                            else:
-                                self.open_or_adjust_hedge_multi(
-                                    symbol,
-                                    hedge_side="short",
-                                    desired_qty=desired_short_qty,
-                                    forcibly_close_hedge=forcibly_close_hedge,
-                                )
+                        short_hedge_blocked = entry_blocked_by_symbol_cap or self.side_position_entry_blocked(
+                            symbol, "short", short_pos_qty, open_position_data, max_side_positions_allowed
+                        )
+                        if short_hedge_blocked:
+                            logging.info(f"[AUTO-HEDGE] {symbol}: Skipping SHORT hedge due to symbol/side position cap.")
+                        else:
+                            desired_short_qty = long_pos_qty * auto_hedge_ratio
+                            logging.info(f"[AUTO-HEDGE] {symbol} TRIGGERING SHORT HEDGE: long_qty={long_pos_qty}, desired_short_qty={desired_short_qty}, min_size={auto_hedge_min_position_size}")
+                            if desired_short_qty >= auto_hedge_min_position_size:
+                                # Use grid behavior for hedge placement if hedge_with_grid is enabled
+                                if hedge_with_grid:
+                                    self.open_or_adjust_hedge_multi_with_grid(
+                                        symbol,
+                                        hedge_side="short",
+                                        desired_qty=desired_short_qty,
+                                        forcibly_close_hedge=forcibly_close_hedge,
+                                        use_grid_behavior=True,
+                                        one_symbol_optimization=one_symbol_optimization,
+                                        grid_behavior=grid_behavior,
+                                        drawdown_behavior=drawdown_behavior,
+                                        max_side_positions_allowed=max_side_positions_allowed,
+                                    )
+                                else:
+                                    self.open_or_adjust_hedge_multi(
+                                        symbol,
+                                        hedge_side="short",
+                                        desired_qty=desired_short_qty,
+                                        forcibly_close_hedge=forcibly_close_hedge,
+                                        max_side_positions_allowed=max_side_positions_allowed,
+                                    )
                     elif forcibly_close_hedge and hedge_short["qty"] > 0:
                         self.close_specific_hedge(symbol, "short")
 
                     # Hedge LONG when main SHORT moves
                     if has_open_short and price_diff_satisfied(short_pos_price, current_price, auto_hedge_price_diff_threshold):
-                        desired_long_qty = short_pos_qty * auto_hedge_ratio
-                        logging.info(f"[AUTO-HEDGE] {symbol} TRIGGERING LONG HEDGE: short_qty={short_pos_qty}, desired_long_qty={desired_long_qty}, min_size={auto_hedge_min_position_size}")
-                        if desired_long_qty >= auto_hedge_min_position_size:
-                            # Use grid behavior for hedge placement if hedge_with_grid is enabled
-                            if hedge_with_grid:
-                                self.open_or_adjust_hedge_multi_with_grid(
-                                    symbol,
-                                    hedge_side="long",
-                                    desired_qty=desired_long_qty,
-                                    forcibly_close_hedge=forcibly_close_hedge,
-                                    use_grid_behavior=True,
-                                    one_symbol_optimization=one_symbol_optimization,
-                                    grid_behavior=grid_behavior,
-                                    drawdown_behavior=drawdown_behavior
-                                )
-                            else:
-                                self.open_or_adjust_hedge_multi(
-                                    symbol,
-                                    hedge_side="long",
-                                    desired_qty=desired_long_qty,
-                                    forcibly_close_hedge=forcibly_close_hedge,
-                                )
+                        long_hedge_blocked = entry_blocked_by_symbol_cap or self.side_position_entry_blocked(
+                            symbol, "long", long_pos_qty, open_position_data, max_side_positions_allowed
+                        )
+                        if long_hedge_blocked:
+                            logging.info(f"[AUTO-HEDGE] {symbol}: Skipping LONG hedge due to symbol/side position cap.")
+                        else:
+                            desired_long_qty = short_pos_qty * auto_hedge_ratio
+                            logging.info(f"[AUTO-HEDGE] {symbol} TRIGGERING LONG HEDGE: short_qty={short_pos_qty}, desired_long_qty={desired_long_qty}, min_size={auto_hedge_min_position_size}")
+                            if desired_long_qty >= auto_hedge_min_position_size:
+                                # Use grid behavior for hedge placement if hedge_with_grid is enabled
+                                if hedge_with_grid:
+                                    self.open_or_adjust_hedge_multi_with_grid(
+                                        symbol,
+                                        hedge_side="long",
+                                        desired_qty=desired_long_qty,
+                                        forcibly_close_hedge=forcibly_close_hedge,
+                                        use_grid_behavior=True,
+                                        one_symbol_optimization=one_symbol_optimization,
+                                        grid_behavior=grid_behavior,
+                                        drawdown_behavior=drawdown_behavior,
+                                        max_side_positions_allowed=max_side_positions_allowed,
+                                    )
+                                else:
+                                    self.open_or_adjust_hedge_multi(
+                                        symbol,
+                                        hedge_side="long",
+                                        desired_qty=desired_long_qty,
+                                        forcibly_close_hedge=forcibly_close_hedge,
+                                        max_side_positions_allowed=max_side_positions_allowed,
+                                    )
                     elif forcibly_close_hedge and hedge_long["qty"] > 0:
                         self.close_specific_hedge(symbol, "long")
 
@@ -8109,6 +8213,23 @@ class BybitStrategy(BaseStrategy):
                 self.grid_cleared_status[sym][side] = True
 
             self.clear_grid = clear_grid.__get__(self, self.__class__)
+
+            if entry_blocked_by_symbol_cap:
+                logging.info(
+                    f"[{symbol}] Pre-blocking entry grids: unique open symbol count "
+                    f"{unique_open_symbol_count} exceeds symbols_allowed={symbol_limit}."
+                )
+                self.clear_grid(symbol, "buy", exclude_xgrid=False)
+                self.clear_grid(symbol, "sell", exclude_xgrid=False)
+                skip_long_side = True
+                skip_short_side = True
+
+            if self.side_position_entry_blocked(symbol, "long", long_pos_qty, open_position_data, max_side_positions_allowed):
+                self.clear_grid(symbol, "buy", exclude_xgrid=False)
+                skip_long_side = True
+            if self.side_position_entry_blocked(symbol, "short", short_pos_qty, open_position_data, max_side_positions_allowed):
+                self.clear_grid(symbol, "sell", exclude_xgrid=False)
+                skip_short_side = True
 
             # ======================================================================
             # 4  SIGNAL GENERATION & xgridt FLIP HANDLING
@@ -8230,12 +8351,16 @@ class BybitStrategy(BaseStrategy):
                         self.clear_grid(symbol, "sell", exclude_xgrid=False)
                     has_open_short = False
                     skip_short_side = False
+                    if entry_blocked_by_symbol_cap or self.side_position_entry_blocked(symbol, "short", short_pos_qty, open_position_data, max_side_positions_allowed):
+                        skip_short_side = True
                 elif fresh_signal == "short" and has_open_long:
                     cancel_flat_close_orders("long")
                     if can_cancel_xgrid_orders(symbol, "long"):
                         self.clear_grid(symbol, "buy", exclude_xgrid=False)
                     has_open_long = False
                     skip_long_side = False
+                    if entry_blocked_by_symbol_cap or self.side_position_entry_blocked(symbol, "long", long_pos_qty, open_position_data, max_side_positions_allowed):
+                        skip_long_side = True
 
             # —————— grab fresh orders before ANY entry logic ——————
             live_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
@@ -8248,6 +8373,23 @@ class BybitStrategy(BaseStrategy):
                 f"{len(grid_open_orders)} remain after excluding reduceOnly"
             )
             logging.info(f"[{symbol}] grid_open_orders IDs: {[o['id'] for o in grid_open_orders]}")
+
+            if entry_blocked_by_symbol_cap:
+                logging.info(
+                    f"[{symbol}] Blocking entry grids: unique open symbol count "
+                    f"{unique_open_symbol_count} exceeds symbols_allowed={symbol_limit}."
+                )
+                self.clear_grid(symbol, "buy", exclude_xgrid=False)
+                self.clear_grid(symbol, "sell", exclude_xgrid=False)
+                skip_long_side = True
+                skip_short_side = True
+
+            if self.side_position_entry_blocked(symbol, "long", long_pos_qty, open_position_data, max_side_positions_allowed):
+                self.clear_grid(symbol, "buy", exclude_xgrid=False)
+                skip_long_side = True
+            if self.side_position_entry_blocked(symbol, "short", short_pos_qty, open_position_data, max_side_positions_allowed):
+                self.clear_grid(symbol, "sell", exclude_xgrid=False)
+                skip_short_side = True
 
             if graceful_stop_long:
                 self.clear_grid(symbol, "buy", exclude_xgrid=False)
@@ -8267,6 +8409,7 @@ class BybitStrategy(BaseStrategy):
                 and long_mode
                 and long_pos_qty == 0
                 and not graceful_stop_long
+                and not skip_long_side
                 and symbol not in self.max_qty_reached_symbol_long
                 and not self.has_active_grid(symbol, side="long", open_orders=grid_open_orders)
             ):
@@ -8282,6 +8425,7 @@ class BybitStrategy(BaseStrategy):
                 and short_mode
                 and short_pos_qty == 0
                 and not graceful_stop_short
+                and not skip_short_side
                 and symbol not in self.max_qty_reached_symbol_short
                 and not self.has_active_grid(symbol, side="short", open_orders=grid_open_orders)
             ):
@@ -9408,7 +9552,8 @@ class BybitStrategy(BaseStrategy):
                                             use_grid_behavior: bool = True, 
                                             one_symbol_optimization: bool = False,
                                             grid_behavior: str = "normal",
-                                            drawdown_behavior: str = "normal"):
+                                            drawdown_behavior: str = "normal",
+                                            max_side_positions_allowed: int = None):
         """
         Enhanced hedge function that uses grid behaviors when placing hedge positions.
         """
@@ -9505,6 +9650,16 @@ class BybitStrategy(BaseStrategy):
                         f"[AUTO-HEDGE] {symbol}: {hedge_side} hedge already at desired qty={desired_qty:.4f} (tolerance)."
                     )
                     hedge_data['qty'] = desired_qty
+                    return
+
+                open_position_data = self.retry_api_call(self.exchange.get_all_open_positions_bybit)
+                if self.side_position_entry_blocked(
+                    symbol, hedge_side, current_hedge_qty, open_position_data, max_side_positions_allowed
+                ):
+                    logging.info(
+                        f"[AUTO-HEDGE] {symbol}: Skipping {hedge_side} hedge increase due to side position cap."
+                    )
+                    hedge_data['qty'] = current_hedge_qty
                     return
 
                 # (C) Check position limits before placing hedge orders
@@ -9628,7 +9783,8 @@ class BybitStrategy(BaseStrategy):
 
     def open_or_adjust_hedge_multi(self, symbol: str, hedge_side: str, desired_qty: float, 
                                    retry_delay: float = 45, max_retries: int = 2, 
-                                   forcibly_close_hedge: bool = False):
+                                   forcibly_close_hedge: bool = False,
+                                   max_side_positions_allowed: int = None):
         """
         Like open_or_adjust_hedge, but specifically for the multi-hedge approach.
         We do NOT skip the other side, since we can hold both.
@@ -9726,6 +9882,16 @@ class BybitStrategy(BaseStrategy):
                         f"[AUTO-HEDGE] {symbol}: {hedge_side} hedge already at desired qty={desired_qty:.4f} (tolerance)."
                     )
                     hedge_data['qty'] = desired_qty
+                    return
+
+                open_position_data = self.retry_api_call(self.exchange.get_all_open_positions_bybit)
+                if self.side_position_entry_blocked(
+                    symbol, hedge_side, current_hedge_qty, open_position_data, max_side_positions_allowed
+                ):
+                    logging.info(
+                        f"[AUTO-HEDGE] {symbol}: Skipping {hedge_side} hedge increase due to side position cap."
+                    )
+                    hedge_data['qty'] = current_hedge_qty
                     return
 
                 # (C) Attempt Opening/Adjusting Hedge Upward
