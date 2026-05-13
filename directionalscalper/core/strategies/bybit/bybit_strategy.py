@@ -154,6 +154,100 @@ class BybitStrategy(BaseStrategy):
                 count += 1
         return count
 
+    @staticmethod
+    def _positive_float(value, default=None):
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
+
+    def get_short_exposure_ratio_of_long(self, ratio=None) -> float:
+        if ratio is None:
+            linear_grid_config = getattr(self.config, "linear_grid", {}) or {}
+            if isinstance(linear_grid_config, dict):
+                ratio = linear_grid_config.get(
+                    "short_exposure_ratio_of_long",
+                    getattr(self, "short_exposure_ratio_of_long", 1.0),
+                )
+            else:
+                ratio = getattr(
+                    linear_grid_config,
+                    "short_exposure_ratio_of_long",
+                    getattr(self, "short_exposure_ratio_of_long", 1.0),
+                )
+        return self._positive_float(ratio, 1.0)
+
+    def resolve_short_exposure_limits(
+        self,
+        wallet_exposure_limit_long,
+        wallet_exposure_limit_short,
+        max_qty_percent_long,
+        max_qty_percent_short,
+        max_usd_position_value_long=None,
+        max_usd_position_value_short=None,
+        short_exposure_ratio_of_long=None,
+    ) -> dict:
+        ratio = self.get_short_exposure_ratio_of_long(short_exposure_ratio_of_long)
+
+        wallet_long = self._positive_float(wallet_exposure_limit_long, wallet_exposure_limit_long)
+        wallet_short = self._positive_float(wallet_exposure_limit_short, wallet_exposure_limit_short)
+        max_pct_long = self._positive_float(max_qty_percent_long, max_qty_percent_long)
+        max_pct_short = self._positive_float(max_qty_percent_short, max_qty_percent_short)
+        max_usd_long = self._positive_float(max_usd_position_value_long, None)
+        max_usd_short = self._positive_float(max_usd_position_value_short, None)
+
+        effective_wallet_short = wallet_short
+        if isinstance(wallet_long, (int, float)) and isinstance(wallet_short, (int, float)):
+            effective_wallet_short = min(wallet_short, wallet_long * ratio)
+
+        effective_max_pct_short = max_pct_short
+        if isinstance(max_pct_long, (int, float)) and isinstance(max_pct_short, (int, float)):
+            effective_max_pct_short = min(max_pct_short, max_pct_long * ratio)
+
+        effective_max_usd_short = max_usd_short
+        if max_usd_long is not None:
+            ratio_usd_cap = max_usd_long * ratio
+            effective_max_usd_short = (
+                min(max_usd_short, ratio_usd_cap)
+                if max_usd_short is not None
+                else ratio_usd_cap
+            )
+
+        return {
+            "short_exposure_ratio_of_long": ratio,
+            "wallet_exposure_limit_long": wallet_exposure_limit_long,
+            "wallet_exposure_limit_short": effective_wallet_short,
+            "raw_wallet_exposure_limit_short": wallet_exposure_limit_short,
+            "max_qty_percent_long": max_qty_percent_long,
+            "max_qty_percent_short": effective_max_pct_short,
+            "raw_max_qty_percent_short": max_qty_percent_short,
+            "max_usd_position_value_long": max_usd_position_value_long,
+            "max_usd_position_value_short": effective_max_usd_short,
+            "raw_max_usd_position_value_short": max_usd_position_value_short,
+        }
+
+    def log_short_exposure_guardrail(self, symbol: str, limits: dict):
+        ratio = limits.get("short_exposure_ratio_of_long", 1.0)
+        raw_wallet_short = limits.get("raw_wallet_exposure_limit_short")
+        effective_wallet_short = limits.get("wallet_exposure_limit_short")
+        raw_max_pct_short = limits.get("raw_max_qty_percent_short")
+        effective_max_pct_short = limits.get("max_qty_percent_short")
+        raw_max_usd_short = limits.get("raw_max_usd_position_value_short")
+        effective_max_usd_short = limits.get("max_usd_position_value_short")
+
+        if (
+            raw_wallet_short != effective_wallet_short
+            or raw_max_pct_short != effective_max_pct_short
+            or raw_max_usd_short != effective_max_usd_short
+        ):
+            logging.info(
+                f"[{symbol}] Short exposure guardrail ratio={ratio}: "
+                f"wallet_short {raw_wallet_short}->{effective_wallet_short}; "
+                f"max_qty_percent_short {raw_max_pct_short}->{effective_max_pct_short}; "
+                f"max_usd_position_value_short {raw_max_usd_short}->{effective_max_usd_short}"
+            )
+
     def select_entry_allowed_symbols(
         self,
         open_symbols: list,
@@ -6238,6 +6332,19 @@ class BybitStrategy(BaseStrategy):
                     strength = min(strength * 1.3, 3.0)
                     logging.info(f"[{symbol}] ONE-SYMBOL OPTIMIZATION: tighter spreads 0.0005–0.0035, amplified exposure {wallet_exposure_limit_long:.4f}/{wallet_exposure_limit_short:.4f}, strength {strength:.2f}")
 
+            short_guardrail_limits = self.resolve_short_exposure_limits(
+                wallet_exposure_limit_long,
+                wallet_exposure_limit_short,
+                max_qty_percent_long,
+                max_qty_percent_short,
+                max_usd_position_value_long,
+                max_usd_position_value_short,
+            )
+            self.log_short_exposure_guardrail(symbol, short_guardrail_limits)
+            wallet_exposure_limit_short = short_guardrail_limits["wallet_exposure_limit_short"]
+            max_qty_percent_short = short_guardrail_limits["max_qty_percent_short"]
+            max_usd_position_value_short = short_guardrail_limits["max_usd_position_value_short"]
+
             # ─────────────────────────────────────────────────────────────── 3  Price / spread
             spread, current_price = self.get_spread_and_price(symbol)
 
@@ -9438,6 +9545,17 @@ class BybitStrategy(BaseStrategy):
             max_qty_percent_short = getattr(self, 'max_qty_percent_short', 100)
             max_usd_position_value_long = getattr(self, 'max_usd_position_value_long', None)
             max_usd_position_value_short = getattr(self, 'max_usd_position_value_short', None)
+            short_guardrail_limits = self.resolve_short_exposure_limits(
+                getattr(self, "wallet_exposure_limit_long", None),
+                getattr(self, "wallet_exposure_limit_short", None),
+                max_qty_percent_long,
+                max_qty_percent_short,
+                max_usd_position_value_long,
+                max_usd_position_value_short,
+            )
+            self.log_short_exposure_guardrail(symbol, short_guardrail_limits)
+            max_qty_percent_short = short_guardrail_limits["max_qty_percent_short"]
+            max_usd_position_value_short = short_guardrail_limits["max_usd_position_value_short"]
             
             # Log the fetched config values to prove they're being retrieved
             logging.info(f"[HEDGE-GRID] {symbol}: Config values - max_qty_percent_long: {max_qty_percent_long}, max_qty_percent_short: {max_qty_percent_short}")
@@ -9727,6 +9845,18 @@ class BybitStrategy(BaseStrategy):
                 # (C) Check position limits before placing hedge orders
                 max_qty_percent_long = getattr(self, 'max_qty_percent_long', 100)
                 max_qty_percent_short = getattr(self, 'max_qty_percent_short', 100)
+                max_usd_position_value_long = getattr(self, 'max_usd_position_value_long', None)
+                max_usd_position_value_short = getattr(self, 'max_usd_position_value_short', None)
+                short_guardrail_limits = self.resolve_short_exposure_limits(
+                    getattr(self, "wallet_exposure_limit_long", None),
+                    getattr(self, "wallet_exposure_limit_short", None),
+                    max_qty_percent_long,
+                    max_qty_percent_short,
+                    max_usd_position_value_long,
+                    max_usd_position_value_short,
+                )
+                self.log_short_exposure_guardrail(symbol, short_guardrail_limits)
+                max_qty_percent_short = short_guardrail_limits["max_qty_percent_short"]
                 
                 # Calculate total equity to determine position limits
                 try:
@@ -9737,26 +9867,43 @@ class BybitStrategy(BaseStrategy):
                     projected_hedge_qty = current_hedge_qty + abs(qty_diff)
                     projected_usd_value = projected_hedge_qty * mark_price
                     projected_percent = (projected_usd_value / total_equity) * 100
-                    
+
+                    max_qty_long, max_qty_short = self.calculate_max_positions(
+                        symbol,
+                        total_equity,
+                        mark_price,
+                        max_qty_percent_long,
+                        max_qty_percent_short,
+                        max_usd_position_value_long,
+                        short_guardrail_limits["max_usd_position_value_short"],
+                    )
+                    max_allowed_qty = max_qty_long if hedge_side == 'long' else max_qty_short
                     max_allowed_percent = max_qty_percent_long if hedge_side == 'long' else max_qty_percent_short
-                    
-                    if projected_percent > max_allowed_percent:
-                        # Calculate maximum allowed quantity within limits
-                        max_allowed_usd = (max_allowed_percent / 100) * total_equity
-                        max_allowed_qty = max_allowed_usd / mark_price
-                        
+
+                    if projected_hedge_qty > max_allowed_qty:
                         if max_allowed_qty > current_hedge_qty:
                             # Reduce qty_diff to stay within limits
                             allowed_increase = max_allowed_qty - current_hedge_qty
                             qty_diff = min(qty_diff, allowed_increase)
-                            logging.warning(f"[AUTO-HEDGE] {symbol}: Reducing {hedge_side} hedge from {abs(desired_qty - current_hedge_qty):.4f} to {qty_diff:.4f} to respect {max_allowed_percent}% position limit")
+                            logging.warning(
+                                f"[AUTO-HEDGE] {symbol}: Reducing {hedge_side} hedge from "
+                                f"{abs(desired_qty - current_hedge_qty):.4f} to {qty_diff:.4f} "
+                                f"to respect max position limit {max_allowed_qty:.4f}."
+                            )
                         else:
                             # Already at or over limit, skip hedge placement
-                            logging.warning(f"[AUTO-HEDGE] {symbol}: Skipping {hedge_side} hedge - already at {projected_percent:.2f}% (limit: {max_allowed_percent}%)")
+                            logging.warning(
+                                f"[AUTO-HEDGE] {symbol}: Skipping {hedge_side} hedge - current "
+                                f"quantity {current_hedge_qty:.4f} is at/over max {max_allowed_qty:.4f}."
+                            )
                             hedge_data['qty'] = current_hedge_qty
                             return
                             
-                    logging.info(f"[AUTO-HEDGE] {symbol}: Position limit check passed - {hedge_side} hedge would be {projected_percent:.2f}% of equity (limit: {max_allowed_percent}%)")
+                    logging.info(
+                        f"[AUTO-HEDGE] {symbol}: Position limit check passed - {hedge_side} hedge "
+                        f"would be {projected_percent:.2f}% of equity (percent limit: {max_allowed_percent}%, "
+                        f"qty limit: {max_allowed_qty:.4f})"
+                    )
                     
                 except Exception as e:
                     logging.error(f"[AUTO-HEDGE] {symbol}: Error calculating position limits: {e}")
@@ -9955,6 +10102,50 @@ class BybitStrategy(BaseStrategy):
                     )
                     hedge_data['qty'] = current_hedge_qty
                     return
+
+                if hedge_side == "short":
+                    try:
+                        max_qty_percent_long = getattr(self, 'max_qty_percent_long', 100)
+                        max_qty_percent_short = getattr(self, 'max_qty_percent_short', 100)
+                        max_usd_position_value_long = getattr(self, 'max_usd_position_value_long', None)
+                        max_usd_position_value_short = getattr(self, 'max_usd_position_value_short', None)
+                        short_guardrail_limits = self.resolve_short_exposure_limits(
+                            getattr(self, "wallet_exposure_limit_long", None),
+                            getattr(self, "wallet_exposure_limit_short", None),
+                            max_qty_percent_long,
+                            max_qty_percent_short,
+                            max_usd_position_value_long,
+                            max_usd_position_value_short,
+                        )
+                        self.log_short_exposure_guardrail(symbol, short_guardrail_limits)
+                        total_equity = self.retry_api_call(self.exchange.get_futures_balance_bybit)
+                        mark_price = self.exchange.get_current_price(symbol)
+                        _, max_qty_short = self.calculate_max_positions(
+                            symbol,
+                            total_equity,
+                            mark_price,
+                            max_qty_percent_long,
+                            short_guardrail_limits["max_qty_percent_short"],
+                            max_usd_position_value_long,
+                            short_guardrail_limits["max_usd_position_value_short"],
+                        )
+                        max_additional_qty = max_qty_short - current_hedge_qty
+                        if max_additional_qty <= 0:
+                            logging.warning(
+                                f"[AUTO-HEDGE] {symbol}: Skipping short hedge - current short "
+                                f"{current_hedge_qty:.4f} is at/over guardrail max {max_qty_short:.4f}."
+                            )
+                            hedge_data['qty'] = current_hedge_qty
+                            return
+                        if qty_diff > max_additional_qty:
+                            logging.warning(
+                                f"[AUTO-HEDGE] {symbol}: Reducing short hedge increase from "
+                                f"{qty_diff:.4f} to {max_additional_qty:.4f} due to short exposure guardrail."
+                            )
+                            qty_diff = max_additional_qty
+                            desired_qty = current_hedge_qty + qty_diff
+                    except Exception as e:
+                        logging.error(f"[AUTO-HEDGE] {symbol}: Error applying short exposure guardrail: {e}")
 
                 # (C) Attempt Opening/Adjusting Hedge Upward
                 self.cancel_unfilled_hedge_orders(symbol, hedge_side)
@@ -17607,6 +17798,17 @@ class BybitStrategy(BaseStrategy):
     #     return amounts
     
     def calculate_max_positions(self, symbol, total_equity, current_price, max_qty_percent_long, max_qty_percent_short, max_usd_position_value_long=None, max_usd_position_value_short=None):
+        short_guardrail_limits = self.resolve_short_exposure_limits(
+            None,
+            None,
+            max_qty_percent_long,
+            max_qty_percent_short,
+            max_usd_position_value_long,
+            max_usd_position_value_short,
+        )
+        max_qty_percent_short = short_guardrail_limits["max_qty_percent_short"]
+        max_usd_position_value_short = short_guardrail_limits["max_usd_position_value_short"]
+
         leverage_long = self.get_effective_leverage(getattr(self, 'user_defined_leverage_long', 1), symbol, 'buy')
         leverage_short = self.get_effective_leverage(getattr(self, 'user_defined_leverage_short', 1), symbol, 'sell')
 
@@ -17659,6 +17861,18 @@ class BybitStrategy(BaseStrategy):
         """
         try:
             logging.info(f"Checking and managing positions for {symbol}")
+            short_guardrail_limits = self.resolve_short_exposure_limits(
+                wallet_exposure_limit_long,
+                wallet_exposure_limit_short,
+                max_qty_percent_long,
+                max_qty_percent_short,
+                max_usd_position_value_long,
+                max_usd_position_value_short,
+            )
+            self.log_short_exposure_guardrail(symbol, short_guardrail_limits)
+            wallet_exposure_limit_short = short_guardrail_limits["wallet_exposure_limit_short"]
+            max_qty_percent_short = short_guardrail_limits["max_qty_percent_short"]
+            max_usd_position_value_short = short_guardrail_limits["max_usd_position_value_short"]
 
             # Calculate the maximum allowed positions using the same calculation as the actual position limits
             max_qty_long, max_qty_short = self.calculate_max_positions(

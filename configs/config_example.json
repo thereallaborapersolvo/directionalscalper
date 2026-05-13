@@ -32,6 +32,7 @@
             "short_mode": true,
             "wallet_exposure_limit_long": 0.0025,
             "wallet_exposure_limit_short": 0.0015,
+            "short_exposure_ratio_of_long": 0.5,
             "max_qty_percent_long": 60,
             "max_qty_percent_short": 60,
             "min_outer_price_distance": 0.019,

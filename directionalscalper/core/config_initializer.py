@@ -14,6 +14,7 @@ class ConfigInitializer:
             strategy_instance.max_buffer_percentage = config.linear_grid['max_buffer_percentage']
             strategy_instance.wallet_exposure_limit_long = config.linear_grid['wallet_exposure_limit_long']
             strategy_instance.wallet_exposure_limit_short = config.linear_grid['wallet_exposure_limit_short']
+            strategy_instance.short_exposure_ratio_of_long = config.linear_grid.get('short_exposure_ratio_of_long', 1.0)
             strategy_instance.max_qty_percent_long = config.linear_grid['max_qty_percent_long']
             strategy_instance.max_qty_percent_short = config.linear_grid['max_qty_percent_short']
             strategy_instance.max_usd_position_value_long = config.linear_grid.get('max_usd_position_value_long', None)
