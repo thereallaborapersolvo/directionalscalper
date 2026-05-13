@@ -55,6 +55,7 @@ class BybitStrategy(BaseStrategy):
         self.last_cancel_time = {}
         self.last_signal_time = {}
         self.last_mfirsi_signal = {}
+        self.recent_tp_placements = {}
         self.cancel_all_orders_interval = 240
         self.cancel_interval = 120
         self.order_refresh_interval = 120  # seconds
@@ -1664,11 +1665,58 @@ class BybitStrategy(BaseStrategy):
         except Exception as e:
             logging.info(f"An error occurred while canceling entry orders: {e}")
 
+    def _tp_order_qty_matches(self, order_qty, pos_qty):
+        return math.isclose(float(order_qty), float(pos_qty), rel_tol=1e-9, abs_tol=1e-8)
+
+    def _managed_tp_orders_for_side(self, long_tp_orders, short_tp_orders, order_side, symbol):
+        auto_reduce_ids = getattr(self, "auto_reduce_order_ids", {}).get(symbol, set())
+        relevant_tp_orders = long_tp_orders if order_side == "sell" else short_tp_orders
+        return [order for order in relevant_tp_orders if order.get("id") not in auto_reduce_ids]
+
+    def _tp_order_state(self, symbol, order_side, pos_qty, long_tp_orders, short_tp_orders):
+        managed_tp_orders = self._managed_tp_orders_for_side(long_tp_orders, short_tp_orders, order_side, symbol)
+        matching_tp_orders = [
+            order for order in managed_tp_orders
+            if self._tp_order_qty_matches(order.get("qty", 0), pos_qty)
+        ]
+        mismatched_qty_orders = [
+            order for order in managed_tp_orders
+            if not self._tp_order_qty_matches(order.get("qty", 0), pos_qty)
+        ]
+        return matching_tp_orders, mismatched_qty_orders
+
+    def _fresh_tp_order_state(self, symbol, order_side, pos_qty, fallback_open_orders):
+        open_orders = fallback_open_orders
+        get_open_orders = getattr(self.exchange, "get_open_orders", None)
+        if callable(get_open_orders):
+            try:
+                open_orders = get_open_orders(symbol)
+            except Exception as e:
+                logging.info(f"Failed to refresh TP orders for {symbol}; using existing snapshot. Error: {e}")
+
+        long_tp_orders, short_tp_orders = self.exchange.get_open_tp_orders(open_orders)
+        return self._tp_order_state(symbol, order_side, pos_qty, long_tp_orders, short_tp_orders)
+
+    def _record_recent_tp_placement(self, symbol, order_side, pos_qty, tp_price):
+        if not hasattr(self, "recent_tp_placements"):
+            self.recent_tp_placements = {}
+        self.recent_tp_placements[(symbol, order_side)] = {
+            "qty": float(pos_qty),
+            "price": float(tp_price) if tp_price is not None else None,
+            "created_at": time.time(),
+        }
+
+    def _has_recent_matching_tp_placement(self, symbol, order_side, pos_qty, ttl_seconds=3):
+        placement = getattr(self, "recent_tp_placements", {}).get((symbol, order_side))
+        if not placement:
+            return False
+        if time.time() - placement["created_at"] > ttl_seconds:
+            return False
+        return self._tp_order_qty_matches(placement["qty"], pos_qty)
+
     def update_quickscalp_tp_dynamic(self, symbol, pos_qty, upnl_profit_pct, max_upnl_profit_pct, short_pos_price, long_pos_price, positionIdx, order_side, last_tp_update, tp_order_counts, open_orders):
         # Fetch the current open TP orders and TP order counts for the symbol
         long_tp_orders, short_tp_orders = self.retry_api_call(self.exchange.get_open_tp_orders, open_orders)
-        long_tp_count = tp_order_counts['long_tp_count']
-        short_tp_count = tp_order_counts['short_tp_count']
 
         # Determine the minimum notional value for dynamic scaling
         min_notional_value = self.min_notional(symbol)
@@ -1690,11 +1738,13 @@ class BybitStrategy(BaseStrategy):
         new_short_tp_min, new_short_tp_max = self.calculate_quickscalp_short_take_profit_dynamic_distance(short_pos_price, symbol, upnl_profit_pct, scaled_tp_pct)
         new_long_tp_min, new_long_tp_max = self.calculate_quickscalp_long_take_profit_dynamic_distance(long_pos_price, symbol, upnl_profit_pct, scaled_tp_pct)
 
-        # Determine the relevant TP orders based on the order side
-        relevant_tp_orders = long_tp_orders if order_side == "sell" else short_tp_orders
-
-        # Check if there's an existing TP order with a mismatched quantity
-        mismatched_qty_orders = [order for order in relevant_tp_orders if order['qty'] != pos_qty and order['id'] not in self.auto_reduce_order_ids.get(symbol, [])]
+        matching_tp_orders, mismatched_qty_orders = self._tp_order_state(
+            symbol, order_side, pos_qty, long_tp_orders, short_tp_orders
+        )
+        if mismatched_qty_orders or not matching_tp_orders:
+            matching_tp_orders, mismatched_qty_orders = self._fresh_tp_order_state(
+                symbol, order_side, pos_qty, open_orders
+            )
 
         # Cancel mismatched TP orders if any
         for order in mismatched_qty_orders:
@@ -1707,47 +1757,55 @@ class BybitStrategy(BaseStrategy):
         # Using datetime.now() for checking if update is needed
         now = datetime.now()
         # Check if this is a new position (no TP exists) - immediate placement for xgrid
-        no_tp_exists = (order_side == "sell" and long_tp_count == 0) or (order_side == "buy" and short_tp_count == 0)
+        no_tp_exists = not matching_tp_orders
         is_xgrid = hasattr(self, 'config') and self.config.linear_grid.get("grid_behavior") == "xgridt"
         
         if now >= last_tp_update or mismatched_qty_orders or (no_tp_exists and is_xgrid):
-            # Check if a TP order already exists
-            tp_order_exists = (order_side == "sell" and long_tp_count > 0) or (order_side == "buy" and short_tp_count > 0)
+            tp_order_exists = bool(matching_tp_orders)
 
             # Set new TP order with updated prices only if no TP order exists
             if not tp_order_exists:
-                new_tp_price_min = new_long_tp_min if order_side == "sell" else new_short_tp_min
-                logging.info(f"New tp price min: {new_tp_price_min} with order side as {order_side}")
-                new_tp_price_max = new_long_tp_max if order_side == "sell" else new_short_tp_max
-                current_price = self.exchange.get_current_price(symbol)
-                order_book = self.exchange.get_orderbook(symbol)
-                best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
-                best_bid_price = order_book['bids'][0][0] if 'bids' in order_book else self.last_known_bid.get(symbol)
+                if self._has_recent_matching_tp_placement(symbol, order_side, pos_qty):
+                    logging.info(f"Skipping TP update as a recent matching TP was just placed for {symbol}")
+                else:
+                    new_tp_price_min = new_long_tp_min if order_side == "sell" else new_short_tp_min
+                    logging.info(f"New tp price min: {new_tp_price_min} with order side as {order_side}")
+                    new_tp_price_max = new_long_tp_max if order_side == "sell" else new_short_tp_max
+                    current_price = self.exchange.get_current_price(symbol)
+                    order_book = self.exchange.get_orderbook(symbol)
+                    best_ask_price = order_book['asks'][0][0] if 'asks' in order_book else self.last_known_ask.get(symbol)
+                    best_bid_price = order_book['bids'][0][0] if 'bids' in order_book else self.last_known_bid.get(symbol)
 
-                # Ensure TP setting checks are correct for direction
-                if (order_side == "sell" and current_price >= new_tp_price_min) or (order_side == "buy" and current_price <= new_tp_price_max):
-                    # Check if current price has already surpassed the max TP price
-                    if (order_side == "sell" and current_price > new_tp_price_max) or (order_side == "buy" and current_price < new_tp_price_min):
-                        try:
-                            tp_price = best_ask_price if order_side == "sell" else best_bid_price
-                            self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, tp_price, positionIdx=positionIdx, reduce_only=True)
-                            logging.info(f"New {order_side.capitalize()} TP set at current/best price {tp_price} as current price has surpassed the max TP")
-                        except Exception as e:
-                            logging.info(f"Failed to set new {order_side} TP for {symbol} at current/best price. Error: {e}")
+                    # Ensure TP setting checks are correct for direction
+                    if (order_side == "sell" and current_price >= new_tp_price_min) or (order_side == "buy" and current_price <= new_tp_price_max):
+                        # Check if current price has already surpassed the max TP price
+                        if (order_side == "sell" and current_price > new_tp_price_max) or (order_side == "buy" and current_price < new_tp_price_min):
+                            try:
+                                tp_price = best_ask_price if order_side == "sell" else best_bid_price
+                                tp_order = self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, tp_price, positionIdx=positionIdx, reduce_only=True)
+                                if tp_order:
+                                    self._record_recent_tp_placement(symbol, order_side, pos_qty, tp_price)
+                                logging.info(f"New {order_side.capitalize()} TP set at current/best price {tp_price} as current price has surpassed the max TP")
+                            except Exception as e:
+                                logging.info(f"Failed to set new {order_side} TP for {symbol} at current/best price. Error: {e}")
+                        else:
+                            try:
+                                tp_order = self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_min, positionIdx=positionIdx, reduce_only=True)
+                                if tp_order:
+                                    self._record_recent_tp_placement(symbol, order_side, pos_qty, new_tp_price_min)
+                                logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_min} using a normal limit order")
+                            except Exception as e:
+                                logging.info(f"Failed to set new {order_side} TP for {symbol} using a normal limit order. Error: {e}")
                     else:
                         try:
-                            self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_min, positionIdx=positionIdx, reduce_only=True)
-                            logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_min} using a normal limit order")
+                            tp_order = self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_max, positionIdx=positionIdx, reduce_only=True)
+                            if tp_order:
+                                self._record_recent_tp_placement(symbol, order_side, pos_qty, new_tp_price_max)
+                            logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_max} using a post-only order")
                         except Exception as e:
-                            logging.info(f"Failed to set new {order_side} TP for {symbol} using a normal limit order. Error: {e}")
-                else:
-                    try:
-                        self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price_max, positionIdx=positionIdx, reduce_only=True)
-                        logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price_max} using a post-only order")
-                    except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for {symbol} using a post-only order. Error: {e}")
+                            logging.info(f"Failed to set new {order_side} TP for {symbol} using a post-only order. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for {symbol}")
+                logging.info(f"Skipping TP update as a matching TP order already exists for {symbol}")
 
             # Calculate and return the next update time
             return self.calculate_next_update_time()
@@ -1758,18 +1816,18 @@ class BybitStrategy(BaseStrategy):
     def update_quickscalp_tp(self, symbol, pos_qty, upnl_profit_pct, short_pos_price, long_pos_price, positionIdx, order_side, last_tp_update, tp_order_counts, open_orders, max_retries=10):
         # Fetch the current open TP orders and TP order counts for the symbol
         long_tp_orders, short_tp_orders = self.exchange.get_open_tp_orders(open_orders)
-        long_tp_count = tp_order_counts['long_tp_count']
-        short_tp_count = tp_order_counts['short_tp_count']
 
         # Calculate the new TP values using quickscalp method
         new_short_tp = self.calculate_quickscalp_short_take_profit(short_pos_price, symbol, upnl_profit_pct)
         new_long_tp = self.calculate_quickscalp_long_take_profit(long_pos_price, symbol, upnl_profit_pct)
 
-        # Determine the relevant TP orders based on the order side
-        relevant_tp_orders = long_tp_orders if order_side == "sell" else short_tp_orders
-
-        # Check if there's an existing TP order with a mismatched quantity
-        mismatched_qty_orders = [order for order in relevant_tp_orders if order['qty'] != pos_qty and order['id'] not in self.auto_reduce_order_ids.get(symbol, [])]
+        matching_tp_orders, mismatched_qty_orders = self._tp_order_state(
+            symbol, order_side, pos_qty, long_tp_orders, short_tp_orders
+        )
+        if mismatched_qty_orders or not matching_tp_orders:
+            matching_tp_orders, mismatched_qty_orders = self._fresh_tp_order_state(
+                symbol, order_side, pos_qty, open_orders
+            )
 
         # Cancel mismatched TP orders if any
         for order in mismatched_qty_orders:
@@ -1781,30 +1839,36 @@ class BybitStrategy(BaseStrategy):
 
         now = datetime.now()
         if now >= last_tp_update or mismatched_qty_orders:
-            # Check if a TP order already exists
-            tp_order_exists = (order_side == "sell" and long_tp_count > 0) or (order_side == "buy" and short_tp_count > 0)
+            tp_order_exists = bool(matching_tp_orders)
 
             # Set new TP order with updated prices only if no TP order exists
             if not tp_order_exists:
-                new_tp_price = new_long_tp if order_side == "sell" else new_short_tp
-                current_price = self.exchange.get_current_price(symbol)
-
-                if (order_side == "sell" and current_price >= new_tp_price) or (order_side == "buy" and current_price <= new_tp_price):
-                    # If the current price has surpassed the new TP price, use a normal limit order
-                    try:
-                        self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
-                        logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price} using a normal limit order")
-                    except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for {symbol} using a normal limit order. Error: {e}")
+                if self._has_recent_matching_tp_placement(symbol, order_side, pos_qty):
+                    logging.info(f"Skipping TP update as a recent matching TP was just placed for {symbol}")
                 else:
-                    # If the current price hasn't surpassed the new TP price, use a post-only order
-                    try:
-                        self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
-                        logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price} using a post-only order")
-                    except Exception as e:
-                        logging.info(f"Failed to set new {order_side} TP for {symbol} using a post-only order. Error: {e}")
+                    new_tp_price = new_long_tp if order_side == "sell" else new_short_tp
+                    current_price = self.exchange.get_current_price(symbol)
+
+                    if (order_side == "sell" and current_price >= new_tp_price) or (order_side == "buy" and current_price <= new_tp_price):
+                        # If the current price has surpassed the new TP price, use a normal limit order
+                        try:
+                            tp_order = self.exchange.create_normal_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
+                            if tp_order:
+                                self._record_recent_tp_placement(symbol, order_side, pos_qty, new_tp_price)
+                            logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price} using a normal limit order")
+                        except Exception as e:
+                            logging.info(f"Failed to set new {order_side} TP for {symbol} using a normal limit order. Error: {e}")
+                    else:
+                        # If the current price hasn't surpassed the new TP price, use a post-only order
+                        try:
+                            tp_order = self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
+                            if tp_order:
+                                self._record_recent_tp_placement(symbol, order_side, pos_qty, new_tp_price)
+                            logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price} using a post-only order")
+                        except Exception as e:
+                            logging.info(f"Failed to set new {order_side} TP for {symbol} using a post-only order. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for {symbol}")
+                logging.info(f"Skipping TP update as a matching TP order already exists for {symbol}")
 
             # Calculate and return the next update time
             return self.calculate_next_update_time()
@@ -2236,27 +2300,41 @@ class BybitStrategy(BaseStrategy):
         logging.info(f"TP maker function Trying to place TP for {symbol}")
         existing_tps = self.get_open_take_profit_order_quantities(open_orders, order_side)
         logging.info(f"Existing TP from TP maker functions: {existing_tps}")
-        total_existing_tp_qty = sum(qty for qty, _ in existing_tps)
+        auto_reduce_ids = getattr(self, "auto_reduce_order_ids", {}).get(symbol, set())
+        matching_tps = [
+            (qty, existing_tp_id)
+            for qty, existing_tp_id in existing_tps
+            if existing_tp_id not in auto_reduce_ids and self._tp_order_qty_matches(qty, pos_qty)
+        ]
+        mismatched_tps = [
+            (qty, existing_tp_id)
+            for qty, existing_tp_id in existing_tps
+            if existing_tp_id not in auto_reduce_ids and not self._tp_order_qty_matches(qty, pos_qty)
+        ]
+        total_existing_tp_qty = sum(qty for qty, _ in matching_tps)
         logging.info(f"TP maker function Existing {order_side} TPs: {existing_tps}")
 
         if not math.isclose(total_existing_tp_qty, pos_qty):
             try:
-                for qty, existing_tp_id in existing_tps:
-                    if not math.isclose(qty, pos_qty) and existing_tp_id not in self.auto_reduce_order_ids.get(symbol, []):
-                        self.exchange.cancel_order_by_id(existing_tp_id, symbol)
-                        logging.info(f"{order_side.capitalize()} take profit {existing_tp_id} canceled")
-                        time.sleep(0.05)
+                for _, existing_tp_id in mismatched_tps:
+                    self.exchange.cancel_order_by_id(existing_tp_id, symbol)
+                    logging.info(f"{order_side.capitalize()} take profit {existing_tp_id} canceled")
+                    time.sleep(0.05)
             except Exception as e:
                 logging.info(f"Error in cancelling {order_side} TP orders {e}")
 
-        if len(existing_tps) < 1:
+        if not matching_tps:
             try:
-                # Use postonly_limit_order_bybit function to place take profit order
-                tp_order = self.postonly_limit_order_bybit_nolimit(symbol, order_side, pos_qty, take_profit_price, positionIdx, reduceOnly=True)
-                if tp_order and 'id' in tp_order:
-                    logging.info(f"{order_side.capitalize()} take profit set at {take_profit_price} with ID {tp_order['id']}")
+                if self._has_recent_matching_tp_placement(symbol, order_side, pos_qty):
+                    logging.info(f"Skipping TP placement as a recent matching TP was just placed for {symbol}")
                 else:
-                    logging.warning(f"Failed to place {order_side} take profit for {symbol}")
+                    # Use postonly_limit_order_bybit function to place take profit order
+                    tp_order = self.postonly_limit_order_bybit_nolimit(symbol, order_side, pos_qty, take_profit_price, positionIdx, reduceOnly=True)
+                    if tp_order and 'id' in tp_order:
+                        self._record_recent_tp_placement(symbol, order_side, pos_qty, take_profit_price)
+                        logging.info(f"{order_side.capitalize()} take profit set at {take_profit_price} with ID {tp_order['id']}")
+                    else:
+                        logging.warning(f"Failed to place {order_side} take profit for {symbol}")
                 time.sleep(0.05)
             except Exception as e:
                 logging.info(f"Error in placing {order_side} TP: {e}")
@@ -2489,10 +2567,11 @@ class BybitStrategy(BaseStrategy):
 
     def update_dynamic_quickscalp_tp(self, symbol, best_ask_price, best_bid_price, pos_qty, upnl_profit_pct, short_pos_price, long_pos_price, positionIdx, order_side, last_tp_update, tp_order_counts, max_retries=10):
         # Fetch the current open TP orders and TP order counts for the symbol
-        long_tp_orders, short_tp_orders = self.exchange.get_open_tp_orders(symbol)
-
-        long_tp_count = tp_order_counts['long_tp_count']
-        short_tp_count = tp_order_counts['short_tp_count']
+        open_orders = []
+        get_open_orders = getattr(self.exchange, "get_open_orders", None)
+        if callable(get_open_orders):
+            open_orders = get_open_orders(symbol)
+        long_tp_orders, short_tp_orders = self.exchange.get_open_tp_orders(open_orders)
 
         # Calculate the new TP values using quickscalp method w/ dynamic
         new_short_tp = self.calculate_dynamic_short_take_profit(
@@ -2509,11 +2588,13 @@ class BybitStrategy(BaseStrategy):
             upnl_profit_pct
         )
 
-        # Determine the relevant TP orders based on the order side
-        relevant_tp_orders = long_tp_orders if order_side == "sell" else short_tp_orders
-
-        # Check if there's an existing TP order with a mismatched quantity
-        mismatched_qty_orders = [order for order in relevant_tp_orders if order['qty'] != pos_qty]
+        matching_tp_orders, mismatched_qty_orders = self._tp_order_state(
+            symbol, order_side, pos_qty, long_tp_orders, short_tp_orders
+        )
+        if mismatched_qty_orders or not matching_tp_orders:
+            matching_tp_orders, mismatched_qty_orders = self._fresh_tp_order_state(
+                symbol, order_side, pos_qty, open_orders
+            )
 
         # Cancel mismatched TP orders if any
         for order in mismatched_qty_orders:
@@ -2526,19 +2607,23 @@ class BybitStrategy(BaseStrategy):
 
         now = datetime.now()
         if now >= last_tp_update or mismatched_qty_orders:
-            # Check if a TP order already exists
-            tp_order_exists = (order_side == "sell" and long_tp_count > 0) or (order_side == "buy" and short_tp_count > 0)
+            tp_order_exists = bool(matching_tp_orders)
 
             # Set new TP order with updated prices only if no TP order exists
             if not tp_order_exists:
-                new_tp_price = new_long_tp if order_side == "sell" else new_short_tp
-                try:
-                    self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
-                    logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price}")
-                except Exception as e:
-                    logging.info(f"Failed to set new {order_side} TP for {symbol}. Error: {e}")
+                if self._has_recent_matching_tp_placement(symbol, order_side, pos_qty):
+                    logging.info(f"Skipping TP update as a recent matching TP was just placed for {symbol}")
+                else:
+                    new_tp_price = new_long_tp if order_side == "sell" else new_short_tp
+                    try:
+                        tp_order = self.exchange.create_take_profit_order_bybit(symbol, "limit", order_side, pos_qty, new_tp_price, positionIdx=positionIdx, reduce_only=True)
+                        if tp_order:
+                            self._record_recent_tp_placement(symbol, order_side, pos_qty, new_tp_price)
+                        logging.info(f"New {order_side.capitalize()} TP set at {new_tp_price}")
+                    except Exception as e:
+                        logging.info(f"Failed to set new {order_side} TP for {symbol}. Error: {e}")
             else:
-                logging.info(f"Skipping TP update as a TP order already exists for {symbol}")
+                logging.info(f"Skipping TP update as a matching TP order already exists for {symbol}")
 
             # Calculate and return the next update time
             return self.calculate_next_update_time()
