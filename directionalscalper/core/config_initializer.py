@@ -66,6 +66,14 @@ class ConfigInitializer:
 
             strategy_instance.signal_flip_close_at_loss = config.linear_grid.get('signal_flip_close_at_loss', False)
 
+            strategy_instance.profit_rebalance_enabled = config.linear_grid.get('profit_rebalance_enabled', False)
+            strategy_instance.profit_rebalance_loss_budget_ratio = config.linear_grid.get('profit_rebalance_loss_budget_ratio', 0.5)
+            strategy_instance.profit_rebalance_min_daily_profit_usd = config.linear_grid.get('profit_rebalance_min_daily_profit_usd', 0.20)
+            strategy_instance.profit_rebalance_max_position_close_pct = config.linear_grid.get('profit_rebalance_max_position_close_pct', 0.05)
+            strategy_instance.profit_rebalance_order_ttl_seconds = config.linear_grid.get('profit_rebalance_order_ttl_seconds', 600)
+            strategy_instance.profit_rebalance_state_path = config.linear_grid.get('profit_rebalance_state_path', 'data/profit_rebalance_state.json')
+            strategy_instance.profit_rebalance_order_prefix = config.linear_grid.get('profit_rebalance_order_prefix', 'PRB')
+
             # Sticky size configuration
             strategy_instance.sticky_size_enabled = config.linear_grid.get('sticky_size_enabled', False)
             strategy_instance.sticky_size_aggressiveness = config.linear_grid.get('sticky_size_aggressiveness', 1.0)

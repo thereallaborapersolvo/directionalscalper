@@ -922,12 +922,26 @@ class BybitExchange(Exchange):
         # Filter the orders for take profits (reduceOnly) and the specified side
         tp_orders = [
             order for order in response
-            if order.get('info', {}).get('reduceOnly', False) and order.get('side', '').lower() == side.lower()
+            if order.get('info', {}).get('reduceOnly', False)
+            and order.get('side', '').lower() == side.lower()
+            and not self.is_profit_rebalance_order(order)
         ]
         
         # If necessary, you can further parse the orders here using self.parse_order or similar methods
         
         return tp_orders
+
+    @staticmethod
+    def is_profit_rebalance_order(order: dict, prefix: str = "PRB") -> bool:
+        info = order.get("info", {}) if isinstance(order, dict) else {}
+        order_link_id = str(
+            info.get("orderLinkId")
+            or info.get("clientOrderId")
+            or order.get("clientOrderId", "")
+            or order.get("orderLinkId", "")
+            or ""
+        )
+        return order_link_id.startswith(f"{prefix}-") or order_link_id == prefix
 
     # def get_all_open_orders(self):
     #     """Fetches open orders for all symbols."""
@@ -1043,7 +1057,7 @@ class BybitExchange(Exchange):
                 'price': float(order['price'])  # Extracting the price
             }
             
-            if order['info'].get('reduceOnly', False):
+            if order['info'].get('reduceOnly', False) and not self.is_profit_rebalance_order(order):
                 if order['side'] == 'sell':
                     long_tp_orders.append(order_details)
                 elif order['side'] == 'buy':
@@ -1091,6 +1105,7 @@ class BybitExchange(Exchange):
                                 and order_status != "Cancelled"
                                 and reduce_only
                                 and position_idx == position_idx_map[side]
+                                and not self.is_profit_rebalance_order(order)
                             ):
                                 # use the new cancel_derivatives_order function
                                 self.exchange.cancel_derivatives_order(order_id, symbol)
@@ -1210,6 +1225,7 @@ class BybitExchange(Exchange):
                     order['side'].lower() == side
                     and order['info'].get('reduceOnly')
                     and order['info'].get('positionIdx') == position_idx_map[side]
+                    and not self.is_profit_rebalance_order(order)
                 ):
                     order_id = order['id']  # Assuming 'id' is the standard format expected by cancel_order
                     self.exchange.cancel_order(order_id, symbol)
@@ -1233,6 +1249,7 @@ class BybitExchange(Exchange):
                     order['side'].lower() == side
                     and order['info'].get('reduceOnly')
                     and order['info'].get('positionIdx') == position_idx_map[side]
+                    and not self.is_profit_rebalance_order(order)
                 ):
                     total_qty += order.get('amount', 0)  # Assuming 'amount' contains the order quantity
         except Exception as e:

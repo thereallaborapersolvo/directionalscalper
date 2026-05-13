@@ -37,6 +37,7 @@ logging = Logger(logger_name="BybitBaseStrategy", filename="BybitBaseStrategy.lo
 
 grid_lock = threading.Lock()
 hedge_positions_lock = threading.Lock()
+profit_rebalance_state_lock = threading.RLock()
 
 class BybitStrategy(BaseStrategy):
     def __init__(self, exchange, config, manager, symbols_allowed=None):
@@ -347,6 +348,473 @@ class BybitStrategy(BaseStrategy):
             return True
 
         return False
+
+    def get_profit_rebalance_config(self) -> dict:
+        linear_grid_config = getattr(self.config, "linear_grid", {}) or {}
+
+        def cfg_value(key, default):
+            if isinstance(linear_grid_config, dict):
+                return linear_grid_config.get(key, default)
+            return getattr(linear_grid_config, key, default)
+
+        shared_data_path = getattr(self.config, "shared_data_path", "data/")
+        default_state_path = os.path.join(shared_data_path, "profit_rebalance_state.json")
+
+        return {
+            "enabled": bool(cfg_value("profit_rebalance_enabled", False)),
+            "loss_budget_ratio": self._positive_float(
+                cfg_value("profit_rebalance_loss_budget_ratio", 0.5),
+                0.5,
+            ),
+            "min_daily_profit_usd": self._positive_float(
+                cfg_value("profit_rebalance_min_daily_profit_usd", 0.20),
+                0.20,
+            ),
+            "max_position_close_pct": self._positive_float(
+                cfg_value("profit_rebalance_max_position_close_pct", 0.05),
+                0.05,
+            ),
+            "order_ttl_seconds": self._positive_float(
+                cfg_value("profit_rebalance_order_ttl_seconds", 600),
+                600,
+            ),
+            "state_path": cfg_value(
+                "profit_rebalance_state_path",
+                default_state_path,
+            ),
+            "order_prefix": str(cfg_value("profit_rebalance_order_prefix", "PRB") or "PRB"),
+        }
+
+    @staticmethod
+    def profit_rebalance_day_key(now: datetime = None) -> str:
+        now = now or datetime.utcnow()
+        return now.strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _float_or_zero(value) -> float:
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _floor_to_step(value: float, step: float) -> float:
+        try:
+            value = float(value)
+            step = float(step)
+        except (TypeError, ValueError):
+            return 0.0
+        if value <= 0:
+            return 0.0
+        if step <= 0:
+            return value
+        return math.floor(value / step) * step
+
+    @staticmethod
+    def _order_link_id(order: dict) -> str:
+        info = order.get("info", {}) if isinstance(order, dict) else {}
+        return str(
+            info.get("orderLinkId")
+            or info.get("clientOrderId")
+            or order.get("clientOrderId", "")
+            or order.get("orderLinkId", "")
+            or ""
+        )
+
+    @classmethod
+    def is_profit_rebalance_order(cls, order: dict, prefix: str = "PRB") -> bool:
+        order_link_id = cls._order_link_id(order)
+        return order_link_id.startswith(f"{prefix}-") or order_link_id == prefix
+
+    def load_profit_rebalance_state(self, file_path: str = None) -> dict:
+        if file_path is None:
+            file_path = self.get_profit_rebalance_config()["state_path"]
+
+        if not os.path.exists(file_path):
+            return {"version": 1, "symbols": {}}
+
+        try:
+            with profit_rebalance_state_lock:
+                with open(file_path, "r") as f:
+                    content = f.read().strip()
+                if not content:
+                    return {"version": 1, "symbols": {}}
+                data = json.loads(content)
+                if not isinstance(data, dict):
+                    return {"version": 1, "symbols": {}}
+                data.setdefault("version", 1)
+                if not isinstance(data.get("symbols"), dict):
+                    data["symbols"] = {}
+                return data
+        except json.JSONDecodeError as e:
+            backup_path = f"{file_path}.corrupt.{int(time.time())}"
+            try:
+                os.replace(file_path, backup_path)
+                logging.error(f"Failed to parse {file_path}: {e}. Moved corrupt file to {backup_path}.")
+            except OSError as backup_error:
+                logging.error(f"Failed to parse {file_path}: {e}. Could not move corrupt file: {backup_error}")
+            return {"version": 1, "symbols": {}}
+        except Exception as e:
+            logging.error(f"Failed to load profit rebalance state from {file_path}: {e}")
+            return {"version": 1, "symbols": {}}
+
+    def save_profit_rebalance_state(self, state: dict, file_path: str = None) -> None:
+        if file_path is None:
+            file_path = self.get_profit_rebalance_config()["state_path"]
+
+        tmp_path = None
+        try:
+            directory = os.path.dirname(file_path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+
+            tmp_path = f"{file_path}.tmp.{os.getpid()}.{threading.get_ident()}"
+            with profit_rebalance_state_lock:
+                with open(tmp_path, "w") as f:
+                    json.dump(state, f, indent=2, sort_keys=True)
+                    f.write("\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, file_path)
+        except Exception as e:
+            logging.error(f"Failed to save profit rebalance state to {file_path}: {e}")
+            try:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+
+    def ensure_profit_rebalance_symbol_state(
+        self,
+        state: dict,
+        symbol: str,
+        current_cum_realized: float,
+        day_key: str,
+    ) -> tuple:
+        symbols_state = state.setdefault("symbols", {})
+        symbol_state = symbols_state.get(symbol)
+        if not isinstance(symbol_state, dict) or symbol_state.get("day") != day_key:
+            symbol_state = {
+                "day": day_key,
+                "baseline_cum_realized": float(current_cum_realized),
+                "loss_spent": 0.0,
+                "reserved_loss": 0.0,
+                "active_order": None,
+            }
+            symbols_state[symbol] = symbol_state
+            return symbol_state, True
+
+        symbol_state.setdefault("baseline_cum_realized", float(current_cum_realized))
+        symbol_state.setdefault("loss_spent", 0.0)
+        symbol_state.setdefault("reserved_loss", 0.0)
+        symbol_state.setdefault("active_order", None)
+        return symbol_state, False
+
+    def calculate_profit_rebalance_budget(
+        self,
+        symbol_state: dict,
+        current_cum_realized: float,
+        loss_budget_ratio: float,
+    ) -> dict:
+        baseline = self._float_or_zero(symbol_state.get("baseline_cum_realized"))
+        loss_spent = self._float_or_zero(symbol_state.get("loss_spent"))
+        reserved_loss = self._float_or_zero(symbol_state.get("reserved_loss"))
+        source_profit_today = max(0.0, float(current_cum_realized) + loss_spent - baseline)
+        total_loss_budget = source_profit_today * float(loss_budget_ratio)
+        available_loss_budget = max(0.0, total_loss_budget - loss_spent - reserved_loss)
+        return {
+            "source_profit_today": source_profit_today,
+            "total_loss_budget": total_loss_budget,
+            "available_loss_budget": available_loss_budget,
+            "loss_spent": loss_spent,
+            "reserved_loss": reserved_loss,
+        }
+
+    def calculate_profit_rebalance_close(
+        self,
+        side: str,
+        position_qty: float,
+        position_price: float,
+        current_price: float,
+        side_upnl: float,
+        available_loss_budget: float,
+        max_position_close_pct: float,
+        qty_step: float,
+        min_qty: float,
+        min_notional_value: float = 0.0,
+    ) -> dict:
+        position_qty = self._float_or_zero(position_qty)
+        position_price = self._float_or_zero(position_price)
+        current_price = self._float_or_zero(current_price)
+        side_upnl = self._float_or_zero(side_upnl)
+        available_loss_budget = self._float_or_zero(available_loss_budget)
+        max_position_close_pct = self._float_or_zero(max_position_close_pct)
+        qty_step = self._float_or_zero(qty_step)
+        min_qty = self._float_or_zero(min_qty)
+        min_notional_value = self._float_or_zero(min_notional_value)
+
+        if position_qty <= 0 or side_upnl >= 0 or available_loss_budget <= 0:
+            return {"qty": 0.0, "estimated_loss": 0.0, "reason": "no_losing_budgeted_position"}
+
+        loss_per_unit = abs(current_price - position_price)
+        if loss_per_unit <= 0:
+            return {"qty": 0.0, "estimated_loss": 0.0, "reason": "no_price_loss_distance"}
+
+        min_notional_qty = 0.0
+        if current_price > 0 and min_notional_value > 0:
+            min_notional_qty = min_notional_value / current_price
+        effective_min_qty = max(min_qty, min_notional_qty)
+        if available_loss_budget < effective_min_qty * loss_per_unit:
+            return {"qty": 0.0, "estimated_loss": 0.0, "reason": "budget_below_min_order"}
+
+        max_qty_by_budget = available_loss_budget / loss_per_unit
+        max_qty_by_slice = position_qty * max_position_close_pct
+        raw_qty = min(position_qty, max_qty_by_budget, max_qty_by_slice)
+        qty = self._floor_to_step(raw_qty, qty_step or min_qty)
+
+        if qty < effective_min_qty:
+            return {"qty": 0.0, "estimated_loss": 0.0, "reason": "qty_below_min_order"}
+
+        estimated_loss = qty * loss_per_unit
+        while qty >= effective_min_qty and estimated_loss > available_loss_budget + 1e-9:
+            qty = self._floor_to_step(qty - (qty_step or min_qty), qty_step or min_qty)
+            estimated_loss = qty * loss_per_unit
+
+        if qty < effective_min_qty:
+            return {"qty": 0.0, "estimated_loss": 0.0, "reason": "budget_exhausted_after_rounding"}
+
+        return {
+            "qty": qty,
+            "estimated_loss": estimated_loss,
+            "loss_per_unit": loss_per_unit,
+            "reason": "ok",
+        }
+
+    def find_open_profit_rebalance_order(self, open_orders: list, active_order: dict, prefix: str = "PRB"):
+        if not active_order:
+            return None
+        active_id = str(active_order.get("id") or "")
+        active_link_id = str(active_order.get("order_link_id") or "")
+        for order in open_orders or []:
+            order_id = str(order.get("id") or order.get("info", {}).get("orderId") or "")
+            order_link_id = self._order_link_id(order)
+            if order_id == active_id or (active_link_id and order_link_id == active_link_id):
+                return order
+        return None
+
+    def reconcile_profit_rebalance_active_order(
+        self,
+        symbol_state: dict,
+        symbol: str,
+        open_orders: list,
+        current_long_qty: float,
+        current_short_qty: float,
+        order_ttl_seconds: float,
+        prefix: str,
+        now_ts: float = None,
+    ) -> bool:
+        active_order = symbol_state.get("active_order")
+        if not active_order:
+            return False
+
+        now_ts = now_ts or time.time()
+        open_order = self.find_open_profit_rebalance_order(open_orders, active_order, prefix)
+        if open_order:
+            created_at = self._float_or_zero(active_order.get("created_at"))
+            if created_at and now_ts - created_at > order_ttl_seconds:
+                try:
+                    self.exchange.cancel_order_by_id(active_order.get("id"), symbol)
+                    logging.info(f"[{symbol}] Canceled stale profit rebalance order {active_order.get('id')}.")
+                except Exception as e:
+                    logging.info(f"[{symbol}] Failed to cancel stale profit rebalance order {active_order.get('id')}: {e}")
+                    return True
+                symbol_state["reserved_loss"] = max(
+                    0.0,
+                    self._float_or_zero(symbol_state.get("reserved_loss"))
+                    - self._float_or_zero(active_order.get("estimated_loss")),
+                )
+                symbol_state["active_order"] = None
+                return False
+            return True
+
+        side = active_order.get("side")
+        position_qty_at_order = self._float_or_zero(active_order.get("position_qty_at_order"))
+        current_side_qty = current_long_qty if side == "long" else current_short_qty
+        qty_reduced = max(0.0, position_qty_at_order - self._float_or_zero(current_side_qty))
+        order_qty = self._float_or_zero(active_order.get("qty"))
+        fill_ratio = min(1.0, qty_reduced / order_qty) if order_qty > 0 else 0.0
+        filled_loss = self._float_or_zero(active_order.get("estimated_loss")) * fill_ratio
+
+        if filled_loss > 0:
+            symbol_state["loss_spent"] = self._float_or_zero(symbol_state.get("loss_spent")) + filled_loss
+            logging.info(f"[{symbol}] Profit rebalance order {active_order.get('id')} filled ratio={fill_ratio:.4f}; loss spent += {filled_loss:.4f}.")
+        else:
+            logging.info(f"[{symbol}] Profit rebalance order {active_order.get('id')} is no longer open and no position reduction was detected.")
+
+        symbol_state["reserved_loss"] = max(
+            0.0,
+            self._float_or_zero(symbol_state.get("reserved_loss"))
+            - self._float_or_zero(active_order.get("estimated_loss")),
+        )
+        symbol_state["active_order"] = None
+        return False
+
+    def maybe_profit_rebalance_stuck_position(
+        self,
+        symbol: str,
+        current_cum_realized: float,
+        long_pos_qty: float,
+        short_pos_qty: float,
+        long_pos_price: float,
+        short_pos_price: float,
+        long_upnl: float,
+        short_upnl: float,
+        current_price: float,
+        best_ask_price: float,
+        best_bid_price: float,
+        qty_step: float,
+        min_qty: float,
+        long_blocked: bool,
+        short_blocked: bool,
+        open_orders: list,
+    ) -> dict:
+        cfg = self.get_profit_rebalance_config()
+        if not cfg["enabled"]:
+            return {"action": "disabled"}
+
+        day_key = self.profit_rebalance_day_key()
+        state_path = cfg["state_path"]
+
+        with profit_rebalance_state_lock:
+            state = self.load_profit_rebalance_state(state_path)
+            symbol_state, initialized = self.ensure_profit_rebalance_symbol_state(
+                state,
+                symbol,
+                current_cum_realized,
+                day_key,
+            )
+            changed = initialized
+
+            had_active_order = bool(symbol_state.get("active_order"))
+            active_blocking = self.reconcile_profit_rebalance_active_order(
+                symbol_state,
+                symbol,
+                open_orders,
+                long_pos_qty,
+                short_pos_qty,
+                cfg["order_ttl_seconds"],
+                cfg["order_prefix"],
+            )
+            if active_blocking:
+                if changed:
+                    self.save_profit_rebalance_state(state, state_path)
+                return {"action": "active_order"}
+            if had_active_order and symbol_state.get("active_order") is None:
+                changed = True
+
+            if initialized:
+                for order in open_orders or []:
+                    if self.is_profit_rebalance_order(order, cfg["order_prefix"]):
+                        order_id = order.get("id") or order.get("info", {}).get("orderId")
+                        try:
+                            self.exchange.cancel_order_by_id(order_id, symbol)
+                            logging.info(f"[{symbol}] Canceled existing profit rebalance order {order_id} while initializing fresh daily state.")
+                        except Exception as e:
+                            logging.info(f"[{symbol}] Failed to cancel existing profit rebalance order {order_id} during initialization: {e}")
+                logging.info(f"[{symbol}] Profit rebalance initialized fresh baseline at cumulative realized {current_cum_realized:.4f}.")
+                self.save_profit_rebalance_state(state, state_path)
+                return {"action": "initialized"}
+
+            budget = self.calculate_profit_rebalance_budget(
+                symbol_state,
+                current_cum_realized,
+                cfg["loss_budget_ratio"],
+            )
+
+            if budget["source_profit_today"] < cfg["min_daily_profit_usd"]:
+                if changed:
+                    self.save_profit_rebalance_state(state, state_path)
+                return {"action": "below_profit_threshold", **budget}
+
+            candidates = []
+            if long_blocked and self._float_or_zero(long_pos_qty) > 0 and self._float_or_zero(long_upnl) < 0:
+                candidates.append(("long", abs(self._float_or_zero(long_upnl))))
+            if short_blocked and self._float_or_zero(short_pos_qty) > 0 and self._float_or_zero(short_upnl) < 0:
+                candidates.append(("short", abs(self._float_or_zero(short_upnl))))
+            if not candidates:
+                if changed:
+                    self.save_profit_rebalance_state(state, state_path)
+                return {"action": "no_blocked_losing_side", **budget}
+
+            side, _ = max(candidates, key=lambda item: item[1])
+            position_qty = long_pos_qty if side == "long" else short_pos_qty
+            position_price = long_pos_price if side == "long" else short_pos_price
+            side_upnl = long_upnl if side == "long" else short_upnl
+
+            close = self.calculate_profit_rebalance_close(
+                side,
+                position_qty,
+                position_price,
+                current_price,
+                side_upnl,
+                budget["available_loss_budget"],
+                cfg["max_position_close_pct"],
+                qty_step,
+                min_qty,
+                self.min_notional(symbol),
+            )
+            if close["qty"] <= 0:
+                if changed:
+                    self.save_profit_rebalance_state(state, state_path)
+                return {"action": "skip_order", "side": side, **budget, **close}
+
+            order_side = "sell" if side == "long" else "buy"
+            order_price = best_ask_price if side == "long" else best_bid_price
+            position_idx = 1 if side == "long" else 2
+            order_link_id = f"{cfg['order_prefix']}-{symbol[:12]}-{side[0].upper()}-{int(time.time())}"
+            params = {"reduceOnly": True}
+            try:
+                order = self.exchange.create_tagged_limit_order_bybit(
+                    symbol,
+                    order_side,
+                    close["qty"],
+                    order_price,
+                    positionIdx=position_idx,
+                    orderLinkId=order_link_id,
+                    postOnly=True,
+                    params=params,
+                )
+            except Exception as e:
+                logging.info(f"[{symbol}] Failed to place profit rebalance order: {e}")
+                if changed:
+                    self.save_profit_rebalance_state(state, state_path)
+                return {"action": "order_error", "side": side, "error": str(e), **budget}
+
+            if not order or "id" not in order:
+                logging.info(f"[{symbol}] Profit rebalance order rejected or missing order id: {order}")
+                if changed:
+                    self.save_profit_rebalance_state(state, state_path)
+                return {"action": "order_rejected", "side": side, **budget}
+
+            symbol_state["reserved_loss"] = self._float_or_zero(symbol_state.get("reserved_loss")) + close["estimated_loss"]
+            symbol_state["active_order"] = {
+                "id": order["id"],
+                "order_link_id": order_link_id,
+                "side": side,
+                "order_side": order_side,
+                "qty": close["qty"],
+                "price": order_price,
+                "estimated_loss": close["estimated_loss"],
+                "position_qty_at_order": self._float_or_zero(position_qty),
+                "created_at": time.time(),
+            }
+            self.save_profit_rebalance_state(state, state_path)
+            logging.info(
+                f"[{symbol}] Placed profit rebalance {order_side} reduce-only order "
+                f"{order['id']} side={side} qty={close['qty']} price={order_price} "
+                f"estimated_loss={close['estimated_loss']:.4f} budget_available={budget['available_loss_budget']:.4f}"
+            )
+            return {"action": "order_placed", "side": side, **budget, **close}
 
 
     def load_hedge_positions(self, file_path: str = None, validate_threshold: bool = False):
@@ -6213,6 +6681,10 @@ class BybitStrategy(BaseStrategy):
         sticky_size_use_orderbook: bool = True,
         sticky_size_min_volume_ratio: float = 0.2,
         rotator_symbols_standardized: list = None,
+        cum_realised_pnl_long: float = 0.0,
+        cum_realised_pnl_short: float = 0.0,
+        long_upnl: float = 0.0,
+        short_upnl: float = 0.0,
     ):
         """
         Full linear‑grid driver supporting:
@@ -8532,6 +9004,54 @@ class BybitStrategy(BaseStrategy):
 
             # —————— grab fresh orders before ANY entry logic ——————
             live_orders = self.retry_api_call(self.exchange.get_open_orders, symbol)
+
+            try:
+                amount_precision, _ = self.exchange.get_symbol_precision_bybit(symbol)
+                rebalance_qty_step = float(amount_precision or min_qty)
+            except Exception:
+                rebalance_qty_step = min_qty
+
+            try:
+                long_rebalance_blocked = (
+                    entry_blocked_by_symbol_cap
+                    or symbol in self.max_qty_reached_symbol_long
+                    or self.side_position_entry_blocked(
+                        symbol, "long", long_pos_qty, open_position_data, max_side_positions_allowed
+                    )
+                )
+                short_rebalance_blocked = (
+                    entry_blocked_by_symbol_cap
+                    or symbol in self.max_qty_reached_symbol_short
+                    or self.side_position_entry_blocked(
+                        symbol, "short", short_pos_qty, open_position_data, max_side_positions_allowed
+                    )
+                )
+                rebalance_result = self.maybe_profit_rebalance_stuck_position(
+                    symbol=symbol,
+                    current_cum_realized=(
+                        self._float_or_zero(cum_realised_pnl_long)
+                        + self._float_or_zero(cum_realised_pnl_short)
+                    ),
+                    long_pos_qty=long_pos_qty,
+                    short_pos_qty=short_pos_qty,
+                    long_pos_price=long_pos_price,
+                    short_pos_price=short_pos_price,
+                    long_upnl=long_upnl,
+                    short_upnl=short_upnl,
+                    current_price=current_price,
+                    best_ask_price=best_ask_price,
+                    best_bid_price=best_bid_price,
+                    qty_step=rebalance_qty_step,
+                    min_qty=min_qty,
+                    long_blocked=long_rebalance_blocked,
+                    short_blocked=short_rebalance_blocked,
+                    open_orders=live_orders,
+                )
+                if rebalance_result.get("action") not in ("disabled", "below_profit_threshold", "no_blocked_losing_side"):
+                    logging.info(f"[{symbol}] Profit rebalance result: {rebalance_result}")
+            except Exception as e:
+                logging.error(f"[{symbol}] Profit rebalance check failed: {e}")
+                logging.info(f"Traceback: {traceback.format_exc()}")
 
             # ─────────────────────────────────────────────────────────────── Filter out reduceOnly TP orders
             grid_open_orders = [o for o in live_orders if not o.get("reduceOnly", False)]
