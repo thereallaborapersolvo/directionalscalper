@@ -7887,7 +7887,11 @@ class BybitStrategy(BaseStrategy):
                 max_usd_position_value_long=max_usd_position_value_long,
                 max_usd_position_value_short=max_usd_position_value_short,
                 one_symbol_optimization=one_symbol_optimization,
-                rotator_symbols_standardized=rotator_symbols_standardized
+                rotator_symbols_standardized=rotator_symbols_standardized,
+                cum_realised_pnl_long=cum_realised_pnl_long,
+                cum_realised_pnl_short=cum_realised_pnl_short,
+                long_upnl=long_upnl,
+                short_upnl=short_upnl
             )
 
             logging.info(f"[{symbol}] ▶ open_symbols = {open_symbols}")
@@ -8510,7 +8514,11 @@ class BybitStrategy(BaseStrategy):
         max_usd_position_value_long: float = None,
         max_usd_position_value_short: float = None,
         one_symbol_optimization: bool = False,
-        rotator_symbols_standardized: list = None
+        rotator_symbols_standardized: list = None,
+        cum_realised_pnl_long: float = 0.0,
+        cum_realised_pnl_short: float = 0.0,
+        long_upnl: float = 0.0,
+        short_upnl: float = 0.0
     ):
         """
         Executes placement/replacement of grids, stop-loss, auto-hedge,

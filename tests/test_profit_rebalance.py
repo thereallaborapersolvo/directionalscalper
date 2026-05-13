@@ -1,4 +1,5 @@
 import json
+import inspect
 from types import SimpleNamespace
 
 from directionalscalper.core.exchanges.bybit import BybitExchange
@@ -241,3 +242,17 @@ def test_tp_filter_ignores_profit_rebalance_orders():
 
     assert [order["id"] for order in long_tp_orders] == ["tp-1"]
     assert short_tp_orders == []
+
+
+def test_grid_dispatch_accepts_profit_rebalance_inputs():
+    lineargrid_sig = inspect.signature(BybitStrategy.lineargrid_base)
+    handle_sig = inspect.signature(BybitStrategy.handle_grid_trades)
+
+    for param in (
+        "cum_realised_pnl_long",
+        "cum_realised_pnl_short",
+        "long_upnl",
+        "short_upnl",
+    ):
+        assert param in lineargrid_sig.parameters
+        assert param in handle_sig.parameters
